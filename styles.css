@@ -1,0 +1,212 @@
+/* Flow Chat Danmaku Styles */
+.flow-chat-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* Let clicks pass through to the video */
+  overflow: hidden;
+  z-index: 9999;
+  /* Ensure it stays on top of the video */
+  container-type: inline-size;
+}
+
+.flow-chat-message {
+  position: absolute;
+  white-space: nowrap;
+  color: #ffffff;
+  font-family: "YouTube Noto", Roboto, Arial, Helvetica, sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000,
+    2px 2px 4px rgba(0, 0, 0, 0.8);
+  will-change: transform;
+}
+
+.flow-chat-message img.emoji {
+  height: 1.2em;
+  width: 1.2em;
+  vertical-align: middle;
+}
+
+/* Flow Chat Settings UI */
+.flow-chat-settings-panel {
+  display: none;
+  position: absolute;
+  bottom: 55px;
+  right: 12px;
+  background: rgba(28, 28, 28, 0.95);
+  border-radius: 12px;
+  color: #eee;
+  font-family: "YouTube Noto", Roboto, Arial, Helvetica, sans-serif;
+  z-index: 10000;
+  width: 250px;
+  padding: 12px 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+.flow-chat-settings-panel.active {
+  display: block;
+}
+
+.flow-chat-setting-item {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.flow-chat-setting-item:last-child {
+  border-bottom: none;
+}
+
+.flow-chat-setting-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Toggle Switch */
+.flow-chat-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 14px;
+}
+
+.flow-chat-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.flow-chat-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #717171;
+  transition: .4s;
+  border-radius: 14px;
+}
+
+.flow-chat-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: -2px;
+  bottom: -3px;
+  background-color: #f1f1f1;
+  transition: .4s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+input:checked+.flow-chat-slider {
+  background-color: #a4c8f0;
+}
+
+input:checked+.flow-chat-slider:before {
+  transform: translateX(20px);
+  background-color: #3ea6ff;
+}
+
+/* Range Inputs */
+.flow-chat-setting-item input[type=range] {
+  -webkit-appearance: none;
+  width: 100%;
+  background: transparent;
+}
+
+.flow-chat-setting-item input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: #f1f1f1;
+  cursor: pointer;
+  margin-top: -5px;
+}
+
+.flow-chat-setting-item input[type=range]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 2px;
+  cursor: pointer;
+  background: #717171;
+}
+
+.flow-chat-setting-item input[type=range]:focus {
+  outline: none;
+}
+
+/* YouTube Button Hover */
+.flow-chat-ytp-btn {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.flow-chat-ytp-btn:hover {
+  opacity: 1 !important;
+}
+
+/* Quick Chat Input */
+.flow-chat-quick-input {
+  float: left;
+  box-sizing: border-box;
+  width: 100px;
+  height: 32px;
+  margin-top: 4px;
+  /* Centered relative to typical 40px/48px player bar */
+  margin-right: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.5);
+  color: #eee;
+  border-radius: 16px;
+  padding: 0 12px;
+  font-family: "YouTube Noto", Roboto, Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  transition: width 0.3s ease, border-color 0.3s ease, background 0.3s ease;
+}
+
+.flow-chat-quick-input:focus {
+  outline: none;
+  width: 250px;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.flow-chat-quick-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Force YouTube controls to stay visible while typing in the quick chat input */
+.html5-video-player:has(.flow-chat-quick-input:focus) .ytp-chrome-bottom,
+.html5-video-player:has(.flow-chat-quick-input:focus) .ytp-chrome-top,
+.html5-video-player:has(.flow-chat-quick-input:focus) .ytp-gradient-bottom,
+.html5-video-player:has(.flow-chat-quick-input:focus) .ytp-gradient-top {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.html5-video-player:has(.flow-chat-quick-input:focus) {
+  cursor: default !important;
+}
+
+/* Prevent ghost text cursor when toolbar is hidden */
+.ytp-autohide .flow-chat-quick-input:not(:focus) {
+  pointer-events: none !important;
+}
