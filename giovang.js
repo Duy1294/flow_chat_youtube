@@ -141,8 +141,8 @@ const createDanmaku = (html) => {
   // Randomize vertical position dynamically based on font size to prevent cutoff
   let maxTop = 95; // Default safe fallback
   if (overlayContainer && overlayContainer.clientHeight > 0) {
-    // Estimated height of a message is roughly fontSize * 1.5
-    const msgHeightPx = settings.fontSize * 1.5; 
+    // Estimated height of a message is roughly fontSize * 1.3
+    const msgHeightPx = settings.fontSize * 1.3; 
     const msgHeightPercent = (msgHeightPx / overlayContainer.clientHeight) * 100;
     maxTop = 100 - msgHeightPercent;
     if (maxTop < 0) maxTop = 0;
