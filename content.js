@@ -358,29 +358,31 @@ if (window.location.pathname.startsWith('/live_chat')) {
           </label>
         </div>
       </div>
-      <div class="flow-chat-setting-item">
-        <div class="flow-chat-setting-header">
-          <span>Zone X (<span id="fc-zx-val">${settings.zoneX}</span>%)</span>
+      <div id="fc-zone-settings" style="display: ${settings.zoneEnabled ? 'block' : 'none'}">
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Zone X (<span id="fc-zx-val">${settings.zoneX}</span>%)</span>
+          </div>
+          <input type="range" id="fc-zx" min="0" max="100" step="0.1" value="${settings.zoneX}">
         </div>
-        <input type="range" id="fc-zx" min="0" max="100" step="1" value="${settings.zoneX}">
-      </div>
-      <div class="flow-chat-setting-item">
-        <div class="flow-chat-setting-header">
-          <span>Zone Y (<span id="fc-zy-val">${settings.zoneY}</span>%)</span>
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Zone Y (<span id="fc-zy-val">${settings.zoneY}</span>%)</span>
+          </div>
+          <input type="range" id="fc-zy" min="0" max="100" step="0.1" value="${settings.zoneY}">
         </div>
-        <input type="range" id="fc-zy" min="0" max="100" step="1" value="${settings.zoneY}">
-      </div>
-      <div class="flow-chat-setting-item">
-        <div class="flow-chat-setting-header">
-          <span>Zone Width (<span id="fc-zw-val">${settings.zoneW}</span>%)</span>
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Zone Width (<span id="fc-zw-val">${settings.zoneW}</span>%)</span>
+          </div>
+          <input type="range" id="fc-zw" min="0" max="100" step="0.1" value="${settings.zoneW}">
         </div>
-        <input type="range" id="fc-zw" min="0" max="100" step="1" value="${settings.zoneW}">
-      </div>
-      <div class="flow-chat-setting-item">
-        <div class="flow-chat-setting-header">
-          <span>Zone Height (<span id="fc-zh-val">${settings.zoneH}</span>%)</span>
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Zone Height (<span id="fc-zh-val">${settings.zoneH}</span>%)</span>
+          </div>
+          <input type="range" id="fc-zh" min="0" max="100" step="0.1" value="${settings.zoneH}">
         </div>
-        <input type="range" id="fc-zh" min="0" max="100" step="1" value="${settings.zoneH}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
@@ -489,6 +491,11 @@ if (window.location.pathname.startsWith('/live_chat')) {
       saveSettings();
       updateOverlayMargins();
       updateSafeZonePreview(true);
+      
+      const zoneSettingsDiv = document.getElementById('fc-zone-settings');
+      if (zoneSettingsDiv) {
+        zoneSettingsDiv.style.display = settings.zoneEnabled ? 'block' : 'none';
+      }
     });
 
     ['zx', 'zy', 'zw', 'zh'].forEach(prop => {
