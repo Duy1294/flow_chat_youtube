@@ -21,24 +21,24 @@
   font-size: 24px;
   font-weight: 600;
   text-shadow:
-    -1px -1px 0 #000,
-    1px -1px 0 #000,
-    -1px 1px 0 #000,
-    1px 1px 0 #000,
-    2px 2px 4px rgba(0, 0, 0, 0.8);
+    calc(-1 * var(--fc-stroke, 1px)) calc(-1 * var(--fc-stroke, 1px)) 0 #000,
+    var(--fc-stroke, 1px) calc(-1 * var(--fc-stroke, 1px)) 0 #000,
+    calc(-1 * var(--fc-stroke, 1px)) var(--fc-stroke, 1px) 0 #000,
+    var(--fc-stroke, 1px) var(--fc-stroke, 1px) 0 #000,
+    var(--fc-stroke, 1px) var(--fc-stroke, 1px) 4px rgba(0, 0, 0, 0.8);
   will-change: transform;
   opacity: var(--fc-opacity, 1);
 }
 
 @keyframes radiantStrokeAnim {
-  0%   { text-shadow: -2px -2px 0 #ff0000, 2px -2px 0 #ff0000, -2px 2px 0 #ff0000, 2px 2px 0 #ff0000, 2px 2px 4px rgba(0,0,0,0.8); }
-  14%  { text-shadow: -2px -2px 0 #ff7300, 2px -2px 0 #ff7300, -2px 2px 0 #ff7300, 2px 2px 0 #ff7300, 2px 2px 4px rgba(0,0,0,0.8); }
-  28%  { text-shadow: -2px -2px 0 #fffb00, 2px -2px 0 #fffb00, -2px 2px 0 #fffb00, 2px 2px 0 #fffb00, 2px 2px 4px rgba(0,0,0,0.8); }
-  42%  { text-shadow: -2px -2px 0 #48ff00, 2px -2px 0 #48ff00, -2px 2px 0 #48ff00, 2px 2px 0 #48ff00, 2px 2px 4px rgba(0,0,0,0.8); }
-  57%  { text-shadow: -2px -2px 0 #00ffd5, 2px -2px 0 #00ffd5, -2px 2px 0 #00ffd5, 2px 2px 0 #00ffd5, 2px 2px 4px rgba(0,0,0,0.8); }
-  71%  { text-shadow: -2px -2px 0 #002bff, 2px -2px 0 #002bff, -2px 2px 0 #002bff, 2px 2px 0 #002bff, 2px 2px 4px rgba(0,0,0,0.8); }
-  85%  { text-shadow: -2px -2px 0 #ff00c8, 2px -2px 0 #ff00c8, -2px 2px 0 #ff00c8, 2px 2px 0 #ff00c8, 2px 2px 4px rgba(0,0,0,0.8); }
-  100% { text-shadow: -2px -2px 0 #ff0000, 2px -2px 0 #ff0000, -2px 2px 0 #ff0000, 2px 2px 0 #ff0000, 2px 2px 4px rgba(0,0,0,0.8); }
+  0%   { text-shadow: calc(-1 * var(--fc-stroke, 2px)) calc(-1 * var(--fc-stroke, 2px)) 0 #ff0000, var(--fc-stroke, 2px) calc(-1 * var(--fc-stroke, 2px)) 0 #ff0000, calc(-1 * var(--fc-stroke, 2px)) var(--fc-stroke, 2px) 0 #ff0000, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 0 #ff0000, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 4px rgba(0,0,0,0.8); }
+  14%  { text-shadow: calc(-1 * var(--fc-stroke, 2px)) calc(-1 * var(--fc-stroke, 2px)) 0 #ff7300, var(--fc-stroke, 2px) calc(-1 * var(--fc-stroke, 2px)) 0 #ff7300, calc(-1 * var(--fc-stroke, 2px)) var(--fc-stroke, 2px) 0 #ff7300, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 0 #ff7300, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 4px rgba(0,0,0,0.8); }
+  28%  { text-shadow: calc(-1 * var(--fc-stroke, 2px)) calc(-1 * var(--fc-stroke, 2px)) 0 #fffb00, var(--fc-stroke, 2px) calc(-1 * var(--fc-stroke, 2px)) 0 #fffb00, calc(-1 * var(--fc-stroke, 2px)) var(--fc-stroke, 2px) 0 #fffb00, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 0 #fffb00, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 4px rgba(0,0,0,0.8); }
+  42%  { text-shadow: calc(-1 * var(--fc-stroke, 2px)) calc(-1 * var(--fc-stroke, 2px)) 0 #48ff00, var(--fc-stroke, 2px) calc(-1 * var(--fc-stroke, 2px)) 0 #48ff00, calc(-1 * var(--fc-stroke, 2px)) var(--fc-stroke, 2px) 0 #48ff00, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 0 #48ff00, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 4px rgba(0,0,0,0.8); }
+  57%  { text-shadow: calc(-1 * var(--fc-stroke, 2px)) calc(-1 * var(--fc-stroke, 2px)) 0 #00ffd5, var(--fc-stroke, 2px) calc(-1 * var(--fc-stroke, 2px)) 0 #00ffd5, calc(-1 * var(--fc-stroke, 2px)) var(--fc-stroke, 2px) 0 #00ffd5, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 0 #00ffd5, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 4px rgba(0,0,0,0.8); }
+  71%  { text-shadow: calc(-1 * var(--fc-stroke, 2px)) calc(-1 * var(--fc-stroke, 2px)) 0 #002bff, var(--fc-stroke, 2px) calc(-1 * var(--fc-stroke, 2px)) 0 #002bff, calc(-1 * var(--fc-stroke, 2px)) var(--fc-stroke, 2px) 0 #002bff, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 0 #002bff, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 4px rgba(0,0,0,0.8); }
+  85%  { text-shadow: calc(-1 * var(--fc-stroke, 2px)) calc(-1 * var(--fc-stroke, 2px)) 0 #ff00c8, var(--fc-stroke, 2px) calc(-1 * var(--fc-stroke, 2px)) 0 #ff00c8, calc(-1 * var(--fc-stroke, 2px)) var(--fc-stroke, 2px) 0 #ff00c8, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 0 #ff00c8, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 4px rgba(0,0,0,0.8); }
+  100% { text-shadow: calc(-1 * var(--fc-stroke, 2px)) calc(-1 * var(--fc-stroke, 2px)) 0 #ff0000, var(--fc-stroke, 2px) calc(-1 * var(--fc-stroke, 2px)) 0 #ff0000, calc(-1 * var(--fc-stroke, 2px)) var(--fc-stroke, 2px) 0 #ff0000, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 0 #ff0000, var(--fc-stroke, 2px) var(--fc-stroke, 2px) 4px rgba(0,0,0,0.8); }
 }
 
 .flow-chat-message.radiant-stroke {

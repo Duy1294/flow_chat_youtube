@@ -14,7 +14,8 @@ let settings = {
   marginBottom: 0,
   marginLeft: 0,
   marginRight: 0,
-  radiantStroke: false
+  radiantStroke: false,
+  strokeSize: 2
 };
 
 // Load settings from storage
@@ -26,6 +27,27 @@ chrome.storage.local.get(['flowChatSettings'], (result) => {
   
   if (isEnabled) {
       startObserving();
+  }
+});
+
+// Listen for settings changes from other tabs (like YouTube)
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'local' && changes.flowChatSettings) {
+    settings = { ...settings, ...changes.flowChatSettings.newValue };
+    isEnabled = settings.enabled;
+    updateOverlayMargins(); // Update margins and stroke size immediately
+    
+    if (overlayContainer) {
+      overlayContainer.style.display = isEnabled ? "block" : "none";
+      overlayContainer.style.setProperty('--fc-opacity', settings.opacity / 100);
+    }
+    
+    if (isEnabled) {
+      startObserving();
+    } else if (chatObserver) {
+      chatObserver.disconnect();
+      chatObserver = null;
+    }
   }
 });
 
@@ -63,6 +85,7 @@ const updateOverlayMargins = () => {
   overlayContainer.style.bottom = settings.marginBottom + '%';
   overlayContainer.style.left = settings.marginLeft + '%';
   overlayContainer.style.right = settings.marginRight + '%';
+  overlayContainer.style.setProperty('--fc-stroke', settings.strokeSize + 'px');
   overlayContainer.style.width = 'auto';
   overlayContainer.style.height = 'auto';
 };

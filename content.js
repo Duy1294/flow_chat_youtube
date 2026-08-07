@@ -133,7 +133,8 @@ if (window.location.pathname.startsWith('/live_chat')) {
     marginBottom: 0,
     marginLeft: 0,
     marginRight: 0,
-    radiantStroke: false
+    radiantStroke: false,
+    strokeSize: 2
   };
 
   // Load settings from storage
@@ -181,6 +182,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
     overlayContainer.style.bottom = settings.marginBottom + '%';
     overlayContainer.style.left = settings.marginLeft + '%';
     overlayContainer.style.right = settings.marginRight + '%';
+    overlayContainer.style.setProperty('--fc-stroke', settings.strokeSize + 'px');
     overlayContainer.style.width = 'auto';
     overlayContainer.style.height = 'auto';
   };
@@ -300,6 +302,12 @@ if (window.location.pathname.startsWith('/live_chat')) {
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
+          <span>Stroke Size (<span id="fc-stroke-val">${settings.strokeSize}</span>px)</span>
+        </div>
+        <input type="range" id="fc-stroke" min="1" max="5" step="0.5" value="${settings.strokeSize}">
+      </div>
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
           <span>Opacity (<span id="fc-opacity-val">${settings.opacity}</span>%)</span>
         </div>
         <input type="range" id="fc-opacity" min="10" max="100" value="${settings.opacity}">
@@ -385,6 +393,13 @@ if (window.location.pathname.startsWith('/live_chat')) {
     document.getElementById('fc-radiant-toggle').addEventListener('change', (e) => {
       settings.radiantStroke = e.target.checked;
       saveSettings();
+    });
+
+    document.getElementById('fc-stroke').addEventListener('input', (e) => {
+      settings.strokeSize = e.target.value;
+      document.getElementById('fc-stroke-val').innerText = settings.strokeSize;
+      saveSettings();
+      updateOverlayMargins();
     });
 
     document.getElementById('fc-opacity').addEventListener('input', (e) => {
