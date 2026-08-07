@@ -131,7 +131,12 @@ if (window.location.pathname.startsWith('/live_chat')) {
     marginLeft: 0,
     marginRight: 0,
     radiantStroke: false,
-    strokeSize: 1
+    strokeSize: 1,
+    zoneEnabled: false,
+    zoneX: 0,
+    zoneY: 0,
+    zoneW: 20,
+    zoneH: 20
   };
 
   // Load settings from storage
@@ -171,6 +176,32 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
   });
 
+  let safeZonePreview = null;
+  const updateSafeZonePreview = (show) => {
+    if (!safeZonePreview) {
+      const videoPlayer = document.querySelector('.html5-video-player');
+      if (!videoPlayer) return;
+      safeZonePreview = document.createElement('div');
+      safeZonePreview.className = 'flow-chat-safe-zone-preview';
+      videoPlayer.appendChild(safeZonePreview);
+    }
+    
+    if (show && settings.zoneEnabled) {
+      safeZonePreview.style.display = 'block';
+      safeZonePreview.style.left = settings.zoneX + '%';
+      safeZonePreview.style.top = settings.zoneY + '%';
+      safeZonePreview.style.width = settings.zoneW + '%';
+      safeZonePreview.style.height = settings.zoneH + '%';
+      
+      clearTimeout(safeZonePreview.timeout);
+      safeZonePreview.timeout = setTimeout(() => {
+        safeZonePreview.style.display = 'none';
+      }, 2000);
+    } else {
+      safeZonePreview.style.display = 'none';
+    }
+  };
+
   let marginEditingTimeout;
   const updateOverlayMargins = () => {
     if (!overlayContainer) return;
@@ -181,6 +212,33 @@ if (window.location.pathname.startsWith('/live_chat')) {
     overlayContainer.style.setProperty('--fc-stroke', settings.strokeSize + 'px');
     overlayContainer.style.width = 'auto';
     overlayContainer.style.height = 'auto';
+    
+    if (settings.zoneEnabled) {
+      const zX = parseFloat(settings.zoneX);
+      const zY = parseFloat(settings.zoneY);
+      const zW = parseFloat(settings.zoneW);
+      const zH = parseFloat(settings.zoneH);
+      
+      // Calculate coordinates relative to the overlayContainer, not the whole screen.
+      // Since zoneX/Y are relative to the screen, we must adjust them if margins are applied.
+      // To keep it simple, we'll apply the mask assuming the zone is relative to the screen, 
+      // but clip-path on overlayContainer is relative to overlayContainer itself.
+      // The user will align it visually anyway.
+      overlayContainer.style.clipPath = `polygon(
+        0% 0%, 
+        0% 100%, 
+        ${zX}% 100%, 
+        ${zX}% ${zY}%, 
+        ${zX + zW}% ${zY}%, 
+        ${zX + zW}% ${zY + zH}%, 
+        ${zX}% ${zY + zH}%, 
+        ${zX}% 100%, 
+        100% 100%, 
+        100% 0%
+      )`;
+    } else {
+      overlayContainer.style.clipPath = 'none';
+    }
     
     // Show visual guide line when editing margins
     overlayContainer.classList.add('fc-margin-editing');
@@ -293,6 +351,39 @@ if (window.location.pathname.startsWith('/live_chat')) {
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
+          <span>Safe Zone (Camera)</span>
+          <label class="flow-chat-switch">
+            <input type="checkbox" id="fc-zone-toggle" ${settings.zoneEnabled ? 'checked' : ''}>
+            <span class="flow-chat-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Zone X (<span id="fc-zx-val">${settings.zoneX}</span>%)</span>
+        </div>
+        <input type="range" id="fc-zx" min="0" max="100" step="1" value="${settings.zoneX}">
+      </div>
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Zone Y (<span id="fc-zy-val">${settings.zoneY}</span>%)</span>
+        </div>
+        <input type="range" id="fc-zy" min="0" max="100" step="1" value="${settings.zoneY}">
+      </div>
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Zone Width (<span id="fc-zw-val">${settings.zoneW}</span>%)</span>
+        </div>
+        <input type="range" id="fc-zw" min="0" max="100" step="1" value="${settings.zoneW}">
+      </div>
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Zone Height (<span id="fc-zh-val">${settings.zoneH}</span>%)</span>
+        </div>
+        <input type="range" id="fc-zh" min="0" max="100" step="1" value="${settings.zoneH}">
+      </div>
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
           <span>Radiant Stroke</span>
           <label class="flow-chat-switch">
             <input type="checkbox" id="fc-radiant-toggle" ${settings.radiantStroke ? 'checked' : ''}>
@@ -391,6 +482,24 @@ if (window.location.pathname.startsWith('/live_chat')) {
         const hiddenIframe = document.getElementById('flow-chat-hidden-iframe');
         if (hiddenIframe) hiddenIframe.remove();
       }
+    });
+
+    document.getElementById('fc-zone-toggle').addEventListener('change', (e) => {
+      settings.zoneEnabled = e.target.checked;
+      saveSettings();
+      updateOverlayMargins();
+      updateSafeZonePreview(true);
+    });
+
+    ['zx', 'zy', 'zw', 'zh'].forEach(prop => {
+      document.getElementById(`fc-${prop}`).addEventListener('input', (e) => {
+        const key = prop === 'zx' ? 'zoneX' : prop === 'zy' ? 'zoneY' : prop === 'zw' ? 'zoneW' : 'zoneH';
+        settings[key] = e.target.value;
+        document.getElementById(`fc-${prop}-val`).innerText = settings[key];
+        saveSettings();
+        updateOverlayMargins();
+        updateSafeZonePreview(true);
+      });
     });
 
     document.getElementById('fc-radiant-toggle').addEventListener('change', (e) => {
