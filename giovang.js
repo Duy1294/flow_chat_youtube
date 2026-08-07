@@ -97,11 +97,11 @@ const updateOverlayMargins = () => {
 };
 
 const setupOverlay = () => {
-  // Tìm khung chứa video trên giovang.city
-  const videoPlayer = document.querySelector('.dplayer-video-wrap') || document.querySelector('.video-wrapper') || document.querySelector('.box-livestream-video') || document.querySelector('video')?.parentElement;
+  // Ưu tiên .dplayer-video-wrap vì trên trang có custom-subtitle-container nằm trong này và hiển thị tốt lúc fullscreen
+  const videoPlayer = document.querySelector('.dplayer-video-wrap') || document.querySelector('.dplayer') || document.querySelector('.video-wrapper') || document.querySelector('.box-livestream-video') || document.querySelector('video')?.parentElement;
   
   if (videoPlayer && !document.getElementById('flow-chat-overlay')) {
-    console.log("Flow Chat: Found video player, injecting overlay");
+    console.log("Flow Chat: Found video player, injecting overlay into", videoPlayer.className);
     overlayContainer = document.createElement('div');
     overlayContainer.id = 'flow-chat-overlay';
     overlayContainer.className = 'flow-chat-overlay';
@@ -110,10 +110,20 @@ const setupOverlay = () => {
     overlayContainer.style.setProperty('--fc-opacity', settings.opacity / 100);
     updateOverlayMargins();
 
-    videoPlayer.style.position = 'relative'; // Đảm bảo relative để overlay hiển thị đúng
-    // Đặt z-index để chắc chắn đè lên trên video player (đặc biệt là DPlayer)
-    overlayContainer.style.zIndex = '9999';
+    videoPlayer.style.setProperty('position', 'relative', 'important'); // Đảm bảo container giữ relative
+    // Đặt z-index cực cao để chắc chắn đè lên mọi UI của DPlayer trong fullscreen
+    overlayContainer.style.setProperty('z-index', '2147483647', 'important');
+    overlayContainer.style.setProperty('position', 'absolute', 'important');
+    overlayContainer.style.setProperty('top', '0', 'important');
+    overlayContainer.style.setProperty('left', '0', 'important');
+    overlayContainer.style.setProperty('width', '100%', 'important');
+    overlayContainer.style.setProperty('height', '100%', 'important');
+    overlayContainer.style.setProperty('pointer-events', 'none', 'important');
+    
     videoPlayer.appendChild(overlayContainer);
+  } else if (videoPlayer && overlayContainer && overlayContainer.parentElement !== videoPlayer) {
+    videoPlayer.appendChild(overlayContainer);
+    updateOverlayMargins();
   } else if (videoPlayer) {
     overlayContainer = document.getElementById('flow-chat-overlay');
     updateOverlayMargins();
@@ -236,3 +246,18 @@ document.addEventListener('visibilitychange', () => {
     });
   }
 });
+
+// Liên tục kiểm tra xem trang web có xóa mất overlay của chúng ta khi chuyển sang fullscreen không
+// (Nhiều trang web có thói quen xóa hoặc render lại toàn bộ player khi ấn fullscreen)
+setInterval(() => {
+  if (isEnabled) {
+    const videoPlayer = document.querySelector('.dplayer-video-wrap') || document.querySelector('.dplayer') || document.querySelector('.video-wrapper') || document.querySelector('.box-livestream-video') || document.querySelector('video')?.parentElement;
+    const overlay = document.getElementById('flow-chat-overlay');
+    
+    if (!overlay || !document.body.contains(overlay)) {
+      if (videoPlayer) setupOverlay();
+    } else if (videoPlayer && overlay.parentElement !== videoPlayer) {
+      setupOverlay();
+    }
+  }
+}, 1000);
