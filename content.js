@@ -689,8 +689,8 @@ if (window.location.pathname.startsWith('/live_chat')) {
         let eHeight = parseFloat(existing.dataset.height) || existing.offsetHeight;
         
         // Vertical Overlap Check
-        // Add a small vertical padding (e.g. 20% of font size) to make it less crowded
-        const verticalPadding = settings.fontSize * 0.2;
+        // Add a small vertical padding (e.g. 10% of font size) to make it less crowded
+        const verticalPadding = settings.fontSize * 0.1;
         if (testTop < eTop + eHeight + verticalPadding && testTop + msgHeight + verticalPadding > eTop) {
           // Horizontal Overlap Check
           let eWidth = parseFloat(existing.dataset.width);
