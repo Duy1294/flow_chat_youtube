@@ -333,25 +333,25 @@ if (window.location.pathname.startsWith('/live_chat')) {
         <div class="flow-chat-setting-header">
           <span>Margin Top (<span id="fc-mt-val">${settings.marginTop}</span>%)</span>
         </div>
-        <input type="range" id="fc-mt" min="0" max="45" step="0.1" value="${settings.marginTop}">
+        <input type="range" id="fc-mt" min="0" max="95" step="0.1" value="${settings.marginTop}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
           <span>Margin Bottom (<span id="fc-mb-val">${settings.marginBottom}</span>%)</span>
         </div>
-        <input type="range" id="fc-mb" min="0" max="45" step="0.1" value="${settings.marginBottom}">
+        <input type="range" id="fc-mb" min="0" max="95" step="0.1" value="${settings.marginBottom}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
           <span>Margin Left (<span id="fc-ml-val">${settings.marginLeft}</span>%)</span>
         </div>
-        <input type="range" id="fc-ml" min="0" max="45" step="0.1" value="${settings.marginLeft}">
+        <input type="range" id="fc-ml" min="0" max="95" step="0.1" value="${settings.marginLeft}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
           <span>Margin Right (<span id="fc-mr-val">${settings.marginRight}</span>%)</span>
         </div>
-        <input type="range" id="fc-mr" min="0" max="45" step="0.1" value="${settings.marginRight}">
+        <input type="range" id="fc-mr" min="0" max="95" step="0.1" value="${settings.marginRight}">
       </div>
     `;
 
@@ -494,7 +494,8 @@ if (window.location.pathname.startsWith('/live_chat')) {
     if (!hiddenIframe) {
       // If we don't have chatUrl yet, check if this is definitely an active live stream
       if (!chatUrl && currentVideoId) {
-        const isLiveBroadcast = document.querySelector('meta[itemprop="isLiveBroadcast"][content="True"]');
+        const isLiveBroadcast = document.querySelector('meta[itemprop="isLiveBroadcast"]') || 
+                                document.querySelector('ytd-live-chat-frame');
         if (isLiveBroadcast) {
           chatUrl = `/live_chat?v=${currentVideoId}`;
         }
