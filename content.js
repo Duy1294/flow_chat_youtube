@@ -304,7 +304,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
         <div class="flow-chat-setting-header">
           <span>Stroke Size (<span id="fc-stroke-val">${settings.strokeSize}</span>px)</span>
         </div>
-        <input type="range" id="fc-stroke" min="1" max="5" step="0.5" value="${settings.strokeSize}">
+        <input type="range" id="fc-stroke" min="0.1" max="3" step="0.1" value="${settings.strokeSize}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
