@@ -537,32 +537,85 @@ if (window.location.pathname.startsWith('/live_chat')) {
       msgDiv.classList.add('radiant-stroke');
     }
     msgDiv.innerHTML = html;
-
-    // Apply Font Size from settings
     msgDiv.style.fontSize = `${settings.fontSize}px`;
 
-    // Randomize vertical position dynamically based on font size to prevent cutoff
-    let maxTop = 95; // Default safe fallback
-    if (overlayContainer && overlayContainer.clientHeight > 0) {
-      // Estimated height of a message is roughly fontSize * 1.3
-      const msgHeightPx = settings.fontSize * 1.3; 
-      const msgHeightPercent = (msgHeightPx / overlayContainer.clientHeight) * 100;
-      maxTop = 100 - msgHeightPercent;
-      if (maxTop < 0) maxTop = 0;
-    }
-    const topPercent = Math.random() * maxTop;
-    msgDiv.style.top = `${topPercent}%`;
-
+    // Temporarily append with visibility hidden to calculate dimensions
+    msgDiv.style.visibility = 'hidden';
     overlayContainer.appendChild(msgDiv);
-
-    // 1. Random Speed
+    
+    const msgWidth = msgDiv.offsetWidth;
+    const msgHeight = msgDiv.offsetHeight || (settings.fontSize * 1.3);
+    const containerWidth = overlayContainer.clientWidth;
+    const containerHeight = overlayContainer.clientHeight;
+    
+    // Random Speed
     const baseDuration = parseFloat(settings.speed);
     const duration = baseDuration + Math.random() * 2;
     const durationMs = duration * 1000;
+    
+    // Velocity: pixels per millisecond
+    const distance = containerWidth + msgWidth;
+    const velocity = distance / durationMs;
+    
+    // Collision Detection
+    let bestTop = 0;
+    let maxTop = containerHeight > 0 ? containerHeight - msgHeight : 0;
+    if (maxTop < 0) maxTop = 0;
+    
+    const existingMessages = Array.from(overlayContainer.querySelectorAll('.flow-chat-message:not([style*="visibility: hidden"])'));
+    
+    for (let attempts = 0; attempts < 20; attempts++) {
+      let testTop = Math.random() * maxTop;
+      let collision = false;
+      
+      for (let existing of existingMessages) {
+        let eTop = existing.offsetTop;
+        let eHeight = parseFloat(existing.dataset.height) || existing.offsetHeight;
+        
+        // Vertical Overlap Check
+        if (testTop < eTop + eHeight && testTop + msgHeight > eTop) {
+          // Horizontal Overlap Check
+          let eWidth = parseFloat(existing.dataset.width);
+          let eVelocity = parseFloat(existing.dataset.velocity);
+          let eStartTime = parseFloat(existing.dataset.startTime);
+          
+          if (!isNaN(eWidth) && !isNaN(eVelocity) && !isNaN(eStartTime)) {
+            let elapsedTime = Date.now() - eStartTime;
+            let eRightEdge = containerWidth - (eVelocity * elapsedTime) + eWidth;
+            
+            // 1. Existing message is still entering the screen
+            if (eRightEdge > containerWidth) {
+              collision = true;
+              break;
+            }
+            
+            // 2. New message is faster and catches up before existing message leaves
+            let eTimeRemaining = eRightEdge / eVelocity;
+            let nTimeToCross = containerWidth / velocity;
+            if (eTimeRemaining > nTimeToCross) {
+              collision = true;
+              break;
+            }
+          }
+        }
+      }
+      
+      bestTop = testTop;
+      if (!collision) {
+        break; // Found a safe spot
+      }
+    }
+    
+    msgDiv.style.top = `${bestTop}px`;
+    msgDiv.style.visibility = 'visible';
+    
+    // Save metadata for future collision checks
+    msgDiv.dataset.width = msgWidth;
+    msgDiv.dataset.height = msgHeight;
+    msgDiv.dataset.velocity = velocity;
+    msgDiv.dataset.startTime = Date.now();
 
-    // Use Web Animations API instead of CSS @keyframes to prevent the animation 
-    // from resetting when the container is resized (e.g. toggling fullscreen).
-    // Using percentages directly in keyframes lets the browser handle resize smoothly.
+    // Use Web Animations API
     const animation = msgDiv.animate([
       { transform: 'translateX(100cqw)' },
       { transform: 'translateX(-100%)' }
