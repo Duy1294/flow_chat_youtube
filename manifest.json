@@ -16,6 +16,13 @@
       "js": ["content.js"],
       "run_at": "document_end",
       "all_frames": true
+    },
+    {
+      "matches": ["*://*.giovang.city/*"],
+      "css": ["styles.css"],
+      "js": ["giovang.js"],
+      "run_at": "document_end",
+      "all_frames": true
     }
   ],
   "action": {

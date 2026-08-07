@@ -27,6 +27,22 @@
     1px 1px 0 #000,
     2px 2px 4px rgba(0, 0, 0, 0.8);
   will-change: transform;
+  opacity: var(--fc-opacity, 1);
+}
+
+@keyframes radiantStrokeAnim {
+  0%   { text-shadow: -2px -2px 0 #ff0000, 2px -2px 0 #ff0000, -2px 2px 0 #ff0000, 2px 2px 0 #ff0000, 2px 2px 4px rgba(0,0,0,0.8); }
+  14%  { text-shadow: -2px -2px 0 #ff7300, 2px -2px 0 #ff7300, -2px 2px 0 #ff7300, 2px 2px 0 #ff7300, 2px 2px 4px rgba(0,0,0,0.8); }
+  28%  { text-shadow: -2px -2px 0 #fffb00, 2px -2px 0 #fffb00, -2px 2px 0 #fffb00, 2px 2px 0 #fffb00, 2px 2px 4px rgba(0,0,0,0.8); }
+  42%  { text-shadow: -2px -2px 0 #48ff00, 2px -2px 0 #48ff00, -2px 2px 0 #48ff00, 2px 2px 0 #48ff00, 2px 2px 4px rgba(0,0,0,0.8); }
+  57%  { text-shadow: -2px -2px 0 #00ffd5, 2px -2px 0 #00ffd5, -2px 2px 0 #00ffd5, 2px 2px 0 #00ffd5, 2px 2px 4px rgba(0,0,0,0.8); }
+  71%  { text-shadow: -2px -2px 0 #002bff, 2px -2px 0 #002bff, -2px 2px 0 #002bff, 2px 2px 0 #002bff, 2px 2px 4px rgba(0,0,0,0.8); }
+  85%  { text-shadow: -2px -2px 0 #ff00c8, 2px -2px 0 #ff00c8, -2px 2px 0 #ff00c8, 2px 2px 0 #ff00c8, 2px 2px 4px rgba(0,0,0,0.8); }
+  100% { text-shadow: -2px -2px 0 #ff0000, 2px -2px 0 #ff0000, -2px 2px 0 #ff0000, 2px 2px 0 #ff0000, 2px 2px 4px rgba(0,0,0,0.8); }
+}
+
+.flow-chat-message.radiant-stroke {
+  animation: radiantStrokeAnim 3s linear infinite !important;
 }
 
 .flow-chat-message img.emoji {

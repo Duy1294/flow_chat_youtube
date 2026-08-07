@@ -68,6 +68,12 @@ if (window.location.pathname.startsWith('/live_chat')) {
           if (sendButton.hasAttribute('disabled')) sendButton.removeAttribute('disabled');
           if (sendButton.getAttribute('aria-disabled') === 'true') sendButton.setAttribute('aria-disabled', 'false');
           sendButton.click();
+          
+          // Reclaim focus from iframe back to parent page to avoid breaking keyboard shortcuts
+          setTimeout(() => {
+            inputField.blur();
+            window.parent.postMessage({ type: 'CHAT_MESSAGE_SENT_RESTORE_FOCUS' }, '*');
+          }, 50);
         }, 150);
       }
     }
@@ -126,7 +132,8 @@ if (window.location.pathname.startsWith('/live_chat')) {
     marginTop: 0,
     marginBottom: 0,
     marginLeft: 0,
-    marginRight: 0
+    marginRight: 0,
+    radiantStroke: false
   };
 
   // Load settings from storage
@@ -188,7 +195,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
       // Initial state
       overlayContainer.style.display = settings.enabled ? "block" : "none";
-      overlayContainer.style.opacity = settings.opacity / 100;
+      overlayContainer.style.setProperty('--fc-opacity', settings.opacity / 100);
       updateOverlayMargins();
 
       videoPlayer.appendChild(overlayContainer);
@@ -228,6 +235,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
         e.stopPropagation();
         if (eventType === 'keydown') {
           if (e.key === 'Enter') {
+            e.preventDefault(); // Prevent default enter behavior on the input
             const message = chatInput.value.trim();
             if (message) {
               // Determine which iframe is currently active handling the chat
@@ -243,8 +251,20 @@ if (window.location.pathname.startsWith('/live_chat')) {
             }
             chatInput.value = '';
             chatInput.blur(); // Always close/unfocus when hitting Enter
+            
+            // Explicitly return focus to the video player so YouTube shortcuts (Space, F, etc) continue to work
+            const videoPlayer = document.querySelector('.html5-video-player');
+            if (videoPlayer) {
+              videoPlayer.focus();
+              videoPlayer.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+            }
           } else if (e.key === 'Escape') {
             chatInput.blur(); // Close/unfocus when hitting Escape
+            const videoPlayer = document.querySelector('.html5-video-player');
+            if (videoPlayer) {
+              videoPlayer.focus();
+              videoPlayer.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+            }
           }
         }
       });
@@ -271,6 +291,15 @@ if (window.location.pathname.startsWith('/live_chat')) {
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
+          <span>Radiant Stroke</span>
+          <label class="flow-chat-switch">
+            <input type="checkbox" id="fc-radiant-toggle" ${settings.radiantStroke ? 'checked' : ''}>
+            <span class="flow-chat-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
           <span>Opacity (<span id="fc-opacity-val">${settings.opacity}</span>%)</span>
         </div>
         <input type="range" id="fc-opacity" min="10" max="100" value="${settings.opacity}">
@@ -291,25 +320,25 @@ if (window.location.pathname.startsWith('/live_chat')) {
         <div class="flow-chat-setting-header">
           <span>Margin Top (<span id="fc-mt-val">${settings.marginTop}</span>%)</span>
         </div>
-        <input type="range" id="fc-mt" min="0" max="50" value="${settings.marginTop}">
+        <input type="range" id="fc-mt" min="0" max="45" value="${settings.marginTop}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
           <span>Margin Bottom (<span id="fc-mb-val">${settings.marginBottom}</span>%)</span>
         </div>
-        <input type="range" id="fc-mb" min="0" max="50" value="${settings.marginBottom}">
+        <input type="range" id="fc-mb" min="0" max="45" value="${settings.marginBottom}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
           <span>Margin Left (<span id="fc-ml-val">${settings.marginLeft}</span>%)</span>
         </div>
-        <input type="range" id="fc-ml" min="0" max="50" value="${settings.marginLeft}">
+        <input type="range" id="fc-ml" min="0" max="45" value="${settings.marginLeft}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
           <span>Margin Right (<span id="fc-mr-val">${settings.marginRight}</span>%)</span>
         </div>
-        <input type="range" id="fc-mr" min="0" max="50" value="${settings.marginRight}">
+        <input type="range" id="fc-mr" min="0" max="45" value="${settings.marginRight}">
       </div>
     `;
 
@@ -353,11 +382,16 @@ if (window.location.pathname.startsWith('/live_chat')) {
       }
     });
 
+    document.getElementById('fc-radiant-toggle').addEventListener('change', (e) => {
+      settings.radiantStroke = e.target.checked;
+      saveSettings();
+    });
+
     document.getElementById('fc-opacity').addEventListener('input', (e) => {
       settings.opacity = e.target.value;
       document.getElementById('fc-opacity-val').innerText = settings.opacity;
       saveSettings();
-      if (overlayContainer) overlayContainer.style.opacity = settings.opacity / 100;
+      if (overlayContainer) overlayContainer.style.setProperty('--fc-opacity', settings.opacity / 100);
     });
 
     document.getElementById('fc-speed').addEventListener('input', (e) => {
@@ -478,6 +512,16 @@ if (window.location.pathname.startsWith('/live_chat')) {
   const seenMessageIds = new Set();
 
   window.addEventListener('message', (event) => {
+    // Restore focus to video player when iframe finishes sending chat
+    if (event.data && event.data.type === 'CHAT_MESSAGE_SENT_RESTORE_FOCUS') {
+      const videoPlayer = document.querySelector('.html5-video-player');
+      if (videoPlayer) {
+        videoPlayer.focus();
+        videoPlayer.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+      }
+      return;
+    }
+
     // Basic validation
     if (event.data && event.data.type === 'FLOW_CHAT_MESSAGE' && isEnabled) {
       // Deduplicate messages using their unique YouTube ID
@@ -508,15 +552,17 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
     const msgDiv = document.createElement('div');
     msgDiv.className = 'flow-chat-message';
+    if (settings.radiantStroke) {
+      msgDiv.classList.add('radiant-stroke');
+    }
     msgDiv.innerHTML = html;
 
     // Apply Font Size from settings
     msgDiv.style.fontSize = `${settings.fontSize}px`;
 
     // Randomize vertical position
-    // Since the container itself is constrained by top/bottom margins,
-    // we just use 0% to ~96% of the container height so text doesn't clip at the bottom.
-    const topPercent = Math.random() * 96;
+    // Dùng % đơn giản để tương thích 100% với mọi trình duyệt
+    const topPercent = Math.random() * 90;
     msgDiv.style.top = `${topPercent}%`;
 
     overlayContainer.appendChild(msgDiv);
@@ -560,6 +606,48 @@ if (window.location.pathname.startsWith('/live_chat')) {
       });
     }
   });
+
+  // Global keydown listener for quick chat in full screen
+  window.addEventListener('keydown', (e) => {
+    // Don't intercept if user is already typing in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      const isFullScreen = document.fullscreenElement !== null;
+      const videoPlayer = document.querySelector('.html5-video-player');
+      const isYtFullScreen = videoPlayer && videoPlayer.classList.contains('ytp-fullscreen');
+
+      if (isFullScreen || isYtFullScreen) {
+        const chatInput = document.querySelector('.flow-chat-quick-input');
+        if (chatInput) {
+          e.preventDefault(); 
+          e.stopPropagation(); // Stop YouTube from doing anything with Enter
+          
+          // Wake up the player controls reliably without breaking YouTube's state machine
+          if (videoPlayer) {
+            const rect = videoPlayer.getBoundingClientRect();
+            // Dispatch mousemove with coordinates to trigger YouTube's movement threshold
+            videoPlayer.dispatchEvent(new MouseEvent('mousemove', { 
+              bubbles: true, cancelable: true, clientX: rect.left + 10, clientY: rect.top + 10 
+            }));
+            setTimeout(() => {
+              videoPlayer.dispatchEvent(new MouseEvent('mousemove', { 
+                bubbles: true, cancelable: true, clientX: rect.left + 50, clientY: rect.top + 50 
+              }));
+            }, 10);
+          }
+          
+          // Focus after a tiny delay to ensure controls are visible and ready
+          setTimeout(() => {
+            chatInput.focus();
+            chatInput.click();
+          }, 50);
+        }
+      }
+    }
+  }, { capture: true }); // Use capture to ensure we intercept before YouTube's player stops propagation
 
   // Keep attempting to setup overlay and settings UI if they are missing
   let observerTimeout = null;
