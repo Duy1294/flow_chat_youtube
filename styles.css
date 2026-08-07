@@ -11,6 +11,13 @@
   z-index: 9999;
   /* Ensure it stays on top of the video */
   container-type: inline-size;
+  transition: background-color 0.3s ease, border 0.3s ease;
+}
+
+.flow-chat-overlay.fc-margin-editing {
+  border: 2px dashed rgba(62, 166, 255, 0.8) !important;
+  background-color: rgba(62, 166, 255, 0.1) !important;
+  box-sizing: border-box;
 }
 
 .flow-chat-message {

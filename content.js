@@ -132,7 +132,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
     marginLeft: 0,
     marginRight: 0,
     radiantStroke: false,
-    strokeSize: 2
+    strokeSize: 1
   };
 
   // Load settings from storage
@@ -173,6 +173,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
   });
 
+  let marginEditingTimeout;
   const updateOverlayMargins = () => {
     if (!overlayContainer) return;
     overlayContainer.style.top = settings.marginTop + '%';
@@ -182,6 +183,13 @@ if (window.location.pathname.startsWith('/live_chat')) {
     overlayContainer.style.setProperty('--fc-stroke', settings.strokeSize + 'px');
     overlayContainer.style.width = 'auto';
     overlayContainer.style.height = 'auto';
+    
+    // Show visual guide line when editing margins
+    overlayContainer.classList.add('fc-margin-editing');
+    clearTimeout(marginEditingTimeout);
+    marginEditingTimeout = setTimeout(() => {
+      if (overlayContainer) overlayContainer.classList.remove('fc-margin-editing');
+    }, 1000);
   };
 
   const setupOverlay = () => {
@@ -569,9 +577,16 @@ if (window.location.pathname.startsWith('/live_chat')) {
     // Apply Font Size from settings
     msgDiv.style.fontSize = `${settings.fontSize}px`;
 
-    // Randomize vertical position
-    // Dùng % đơn giản để tương thích 100% với mọi trình duyệt
-    const topPercent = Math.random() * 97;
+    // Randomize vertical position dynamically based on font size to prevent cutoff
+    let maxTop = 95; // Default safe fallback
+    if (overlayContainer && overlayContainer.clientHeight > 0) {
+      // Estimated height of a message is roughly fontSize * 1.5
+      const msgHeightPx = settings.fontSize * 1.5; 
+      const msgHeightPercent = (msgHeightPx / overlayContainer.clientHeight) * 100;
+      maxTop = 100 - msgHeightPercent;
+      if (maxTop < 0) maxTop = 0;
+    }
+    const topPercent = Math.random() * maxTop;
     msgDiv.style.top = `${topPercent}%`;
 
     overlayContainer.appendChild(msgDiv);
