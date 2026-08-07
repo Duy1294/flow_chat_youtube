@@ -64,8 +64,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (isEnabled) {
       setupOverlay();
     }
-
-    chrome.runtime.sendMessage({ action: "update_badge", state: isEnabled }).catch(() => { });
     
     // Toggle observer
     if (isEnabled) {
@@ -133,7 +131,7 @@ const createDanmaku = (html) => {
   msgDiv.style.fontSize = `${settings.fontSize}px`;
 
   // Dùng % đơn giản để đảm bảo tương thích 100% với mọi trình duyệt
-  const topPercent = Math.random() * 90;
+  const topPercent = Math.random() * 97;
   msgDiv.style.top = `${topPercent}%`;
 
   overlayContainer.appendChild(msgDiv);

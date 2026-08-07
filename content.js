@@ -19,8 +19,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         overlay.style.display = isEnabled ? "block" : "none";
       }
 
-      // Update badge
-      chrome.runtime.sendMessage({ action: "update_badge", state: isEnabled }).catch(() => { });
 
       // Update UI toggle if it exists
       const fcToggle = document.getElementById('fc-toggle');
@@ -173,7 +171,6 @@ if (window.location.pathname.startsWith('/live_chat')) {
       fcToggle.checked = false;
     }
 
-    chrome.runtime.sendMessage({ action: "update_badge", state: false }).catch(() => { });
   });
 
   const updateOverlayMargins = () => {
@@ -378,7 +375,6 @@ if (window.location.pathname.startsWith('/live_chat')) {
       isEnabled = settings.enabled;
       saveSettings();
       if (overlayContainer) overlayContainer.style.display = isEnabled ? "block" : "none";
-      chrome.runtime.sendMessage({ action: "update_badge", state: isEnabled }).catch(() => { });
       if (isEnabled) {
         checkAndInjectHiddenChat();
       } else {
@@ -448,8 +444,6 @@ if (window.location.pathname.startsWith('/live_chat')) {
       saveSettings();
       updateOverlayMargins();
     });
-
-    chrome.runtime.sendMessage({ action: "update_badge", state: settings.enabled }).catch(() => { });
   };
 
   function checkAndInjectHiddenChat() {
@@ -577,7 +571,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
     // Randomize vertical position
     // Dùng % đơn giản để tương thích 100% với mọi trình duyệt
-    const topPercent = Math.random() * 90;
+    const topPercent = Math.random() * 97;
     msgDiv.style.top = `${topPercent}%`;
 
     overlayContainer.appendChild(msgDiv);
