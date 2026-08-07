@@ -368,6 +368,13 @@ if (window.location.pathname.startsWith('/live_chat')) {
       }
     });
 
+    // Stop key events inside settings panel from triggering YouTube player shortcuts
+    ['keydown', 'keyup', 'keypress'].forEach(eventType => {
+      panel.addEventListener(eventType, (e) => {
+        e.stopPropagation();
+      });
+    });
+
     // Event Listeners for inputs
     const saveSettings = () => {
       chrome.storage.local.set({ flowChatSettings: settings });
