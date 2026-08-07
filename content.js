@@ -219,20 +219,29 @@ if (window.location.pathname.startsWith('/live_chat')) {
       const zW = parseFloat(settings.zoneW);
       const zH = parseFloat(settings.zoneH);
 
-      // Calculate coordinates relative to the overlayContainer, not the whole screen.
-      // Since zoneX/Y are relative to the screen, we must adjust them if margins are applied.
-      // To keep it simple, we'll apply the mask assuming the zone is relative to the screen, 
-      // but clip-path on overlayContainer is relative to overlayContainer itself.
-      // The user will align it visually anyway.
+      const mT = parseFloat(settings.marginTop) || 0;
+      const mB = parseFloat(settings.marginBottom) || 0;
+      const mL = parseFloat(settings.marginLeft) || 0;
+      const mR = parseFloat(settings.marginRight) || 0;
+
+      // Convert zone coordinates from screen percentages to overlayContainer percentages
+      const contWidth = 100 - mL - mR;
+      const contHeight = 100 - mT - mB;
+      
+      const cX = contWidth > 0 ? ((zX - mL) / contWidth) * 100 : 0;
+      const cY = contHeight > 0 ? ((zY - mT) / contHeight) * 100 : 0;
+      const cW = contWidth > 0 ? (zW / contWidth) * 100 : 0;
+      const cH = contHeight > 0 ? (zH / contHeight) * 100 : 0;
+
       overlayContainer.style.clipPath = `polygon(
         0% 0%, 
         0% 100%, 
-        ${zX}% 100%, 
-        ${zX}% ${zY}%, 
-        ${zX + zW}% ${zY}%, 
-        ${zX + zW}% ${zY + zH}%, 
-        ${zX}% ${zY + zH}%, 
-        ${zX}% 100%, 
+        ${cX}% 100%, 
+        ${cX}% ${cY}%, 
+        ${cX + cW}% ${cY}%, 
+        ${cX + cW}% ${cY + cH}%, 
+        ${cX}% ${cY + cH}%, 
+        ${cX}% 100%, 
         100% 100%, 
         100% 0%
       )`;
