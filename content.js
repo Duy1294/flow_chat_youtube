@@ -310,7 +310,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
         <div class="flow-chat-setting-header">
           <span>Opacity (<span id="fc-opacity-val">${settings.opacity}</span>%)</span>
         </div>
-        <input type="range" id="fc-opacity" min="10" max="100" value="${settings.opacity}">
+        <input type="range" id="fc-opacity" min="10" max="100" step="0.1" value="${settings.opacity}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
@@ -322,31 +322,31 @@ if (window.location.pathname.startsWith('/live_chat')) {
         <div class="flow-chat-setting-header">
           <span>Font Size (<span id="fc-font-val">${settings.fontSize}</span>px)</span>
         </div>
-        <input type="range" id="fc-font" min="14" max="48" value="${settings.fontSize}">
+        <input type="range" id="fc-font" min="14" max="48" step="0.1" value="${settings.fontSize}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
           <span>Margin Top (<span id="fc-mt-val">${settings.marginTop}</span>%)</span>
         </div>
-        <input type="range" id="fc-mt" min="0" max="45" value="${settings.marginTop}">
+        <input type="range" id="fc-mt" min="0" max="45" step="0.1" value="${settings.marginTop}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
           <span>Margin Bottom (<span id="fc-mb-val">${settings.marginBottom}</span>%)</span>
         </div>
-        <input type="range" id="fc-mb" min="0" max="45" value="${settings.marginBottom}">
+        <input type="range" id="fc-mb" min="0" max="45" step="0.1" value="${settings.marginBottom}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
           <span>Margin Left (<span id="fc-ml-val">${settings.marginLeft}</span>%)</span>
         </div>
-        <input type="range" id="fc-ml" min="0" max="45" value="${settings.marginLeft}">
+        <input type="range" id="fc-ml" min="0" max="45" step="0.1" value="${settings.marginLeft}">
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
           <span>Margin Right (<span id="fc-mr-val">${settings.marginRight}</span>%)</span>
         </div>
-        <input type="range" id="fc-mr" min="0" max="45" value="${settings.marginRight}">
+        <input type="range" id="fc-mr" min="0" max="45" step="0.1" value="${settings.marginRight}">
       </div>
     `;
 
