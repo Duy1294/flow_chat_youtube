@@ -120,7 +120,6 @@ if (window.location.pathname.startsWith('/live_chat')) {
   // --- MAIN PAGE LOGIC (Video Player) ---
   console.log("Flow Chat: Initializing on main page");
   let overlayContainer = null;
-  let chatUrl = null;
 
   let settings = {
     enabled: false,
@@ -153,8 +152,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
     settings.enabled = false;
     isEnabled = false;
 
-    // Clear chat URL and destroy hidden iframe
-    chatUrl = null;
+    // Destroy hidden iframe on navigation
     const hiddenIframe = document.getElementById('flow-chat-hidden-iframe');
     if (hiddenIframe) {
       hiddenIframe.remove();
@@ -245,13 +243,10 @@ if (window.location.pathname.startsWith('/live_chat')) {
             e.preventDefault(); // Prevent default enter behavior on the input
             const message = chatInput.value.trim();
             if (message) {
-              // Determine which iframe is currently active handling the chat
               let iframe = document.querySelector('iframe#chatframe');
-              // If native chat is missing or hidden (offsetWidth === 0), use the hidden iframe
               if (!iframe || iframe.offsetWidth === 0) {
                 iframe = document.getElementById('flow-chat-hidden-iframe');
               }
-
               if (iframe && iframe.contentWindow) {
                 iframe.contentWindow.postMessage({ type: 'SEND_CHAT_MESSAGE', message: message }, '*');
               }
@@ -387,10 +382,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
         checkAndInjectHiddenChat();
       } else {
         const hiddenIframe = document.getElementById('flow-chat-hidden-iframe');
-        if (hiddenIframe) {
-          hiddenIframe.remove();
-          console.log("Flow Chat: Removed hidden iframe because chat was disabled");
-        }
+        if (hiddenIframe) hiddenIframe.remove();
       }
     });
 
@@ -454,79 +446,43 @@ if (window.location.pathname.startsWith('/live_chat')) {
     });
   };
 
+  // Restore hidden chat ONLY for actual live streams.
+  // VOD replays require complex time-sync that YouTube blocks when the original iframe is destroyed.
   function checkAndInjectHiddenChat() {
     if (!isEnabled) {
       const hiddenIframe = document.getElementById('flow-chat-hidden-iframe');
-      if (hiddenIframe) {
-        hiddenIframe.remove();
-        console.log("Flow Chat: Removed hidden iframe because chat is disabled");
-      }
+      if (hiddenIframe) hiddenIframe.remove();
       return;
     }
 
-    // Detect if we navigated to a different video
-    const currentVideoId = new URLSearchParams(window.location.search).get('v');
-    if (chatUrl && currentVideoId && !chatUrl.includes(currentVideoId)) {
-      chatUrl = null;
-      const oldHidden = document.getElementById('flow-chat-hidden-iframe');
-      if (oldHidden) {
-        oldHidden.remove();
-      }
-    }
+    const isLive = document.querySelector('meta[itemprop="isLiveBroadcast"]');
+    if (isLive) {
+      let hiddenIframe = document.getElementById('flow-chat-hidden-iframe');
+      if (!hiddenIframe) {
+        const v = new URLSearchParams(window.location.search).get('v');
+        if (v) {
+          hiddenIframe = document.createElement('iframe');
+          hiddenIframe.id = 'flow-chat-hidden-iframe';
+          hiddenIframe.src = `/live_chat?is_popout=1&v=${v}`;
+          hiddenIframe.style.position = 'fixed';
+          hiddenIframe.style.width = '350px';
+          hiddenIframe.style.height = '600px';
+          hiddenIframe.style.opacity = '0.01'; // Virtually invisible
+          hiddenIframe.style.pointerEvents = 'none'; // Unclickable
+          hiddenIframe.style.top = '100px';
+          hiddenIframe.style.left = '0';
+          hiddenIframe.style.zIndex = '-999';
 
-    // Find the original chat iframe
-    const originalIframe = document.querySelector('iframe#chatframe');
-
-    // Cache the chat URL ONLY if we find a valid original iframe (this proves it's a live stream)
-    if (originalIframe && originalIframe.src && originalIframe.src.includes('live_chat')) {
-      chatUrl = originalIframe.src;
-    }
-
-    const isOriginalVisible = originalIframe &&
-      originalIframe.src &&
-      originalIframe.src.includes('live_chat') &&
-      originalIframe.offsetWidth > 0;
-
-    // ALWAYS use the hidden iframe to prevent chat from reloading or pausing 
-    // when YouTube hides the original chat (e.g. during fullscreen toggle).
-    let hiddenIframe = document.getElementById('flow-chat-hidden-iframe');
-
-    if (!hiddenIframe) {
-      // If we don't have chatUrl yet, check if this is definitely an active live stream
-      if (!chatUrl && currentVideoId) {
-        const isLiveBroadcast = document.querySelector('meta[itemprop="isLiveBroadcast"]') || 
-                                document.querySelector('ytd-live-chat-frame');
-        if (isLiveBroadcast) {
-          chatUrl = `/live_chat?v=${currentVideoId}`;
+          document.body.appendChild(hiddenIframe);
+          console.log("Flow Chat: Hidden Live Chat iframe injected");
         }
-      }
-
-      if (chatUrl) {
-        hiddenIframe = document.createElement('iframe');
-        hiddenIframe.id = 'flow-chat-hidden-iframe';
-        // Ensure we append is_popout=1
-        const urlObj = new URL(chatUrl, window.location.origin);
-        urlObj.searchParams.set('is_popout', '1');
-
-        hiddenIframe.src = urlObj.toString();
-        hiddenIframe.style.position = 'fixed';
-        hiddenIframe.style.width = '350px';
-        hiddenIframe.style.height = '600px';
-        hiddenIframe.style.opacity = '0.01'; // Virtually invisible
-        hiddenIframe.style.pointerEvents = 'none'; // Unclickable
-        hiddenIframe.style.top = '100px';
-        hiddenIframe.style.left = '0';
-        hiddenIframe.style.zIndex = '-999';
-
-        document.body.appendChild(hiddenIframe);
-        console.log("Flow Chat: Hidden iframe injected (Always ON mode to prevent fullscreen reload)");
       }
     }
   }
 
-  setInterval(checkAndInjectHiddenChat, 500);
+  setInterval(checkAndInjectHiddenChat, 2000);
 
-  // We need to listen to messages from the chat iframe (both original and hidden)
+  // We need to listen to messages from the chat iframe
   const seenMessageIds = new Set();
 
   window.addEventListener('message', (event) => {
