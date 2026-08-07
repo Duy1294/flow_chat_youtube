@@ -66,7 +66,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
           if (sendButton.hasAttribute('disabled')) sendButton.removeAttribute('disabled');
           if (sendButton.getAttribute('aria-disabled') === 'true') sendButton.setAttribute('aria-disabled', 'false');
           sendButton.click();
-          
+
           // Reclaim focus from iframe back to parent page to avoid breaking keyboard shortcuts
           setTimeout(() => {
             inputField.blur();
@@ -185,14 +185,14 @@ if (window.location.pathname.startsWith('/live_chat')) {
       safeZonePreview.className = 'flow-chat-safe-zone-preview';
       videoPlayer.appendChild(safeZonePreview);
     }
-    
+
     if (show && settings.zoneEnabled) {
       safeZonePreview.style.display = 'block';
       safeZonePreview.style.left = settings.zoneX + '%';
       safeZonePreview.style.top = settings.zoneY + '%';
       safeZonePreview.style.width = settings.zoneW + '%';
       safeZonePreview.style.height = settings.zoneH + '%';
-      
+
       clearTimeout(safeZonePreview.timeout);
       safeZonePreview.timeout = setTimeout(() => {
         safeZonePreview.style.display = 'none';
@@ -212,13 +212,13 @@ if (window.location.pathname.startsWith('/live_chat')) {
     overlayContainer.style.setProperty('--fc-stroke', settings.strokeSize + 'px');
     overlayContainer.style.width = 'auto';
     overlayContainer.style.height = 'auto';
-    
+
     if (settings.zoneEnabled) {
       const zX = parseFloat(settings.zoneX);
       const zY = parseFloat(settings.zoneY);
       const zW = parseFloat(settings.zoneW);
       const zH = parseFloat(settings.zoneH);
-      
+
       // Calculate coordinates relative to the overlayContainer, not the whole screen.
       // Since zoneX/Y are relative to the screen, we must adjust them if margins are applied.
       // To keep it simple, we'll apply the mask assuming the zone is relative to the screen, 
@@ -239,7 +239,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
     } else {
       overlayContainer.style.clipPath = 'none';
     }
-    
+
     // Show visual guide line when editing margins
     overlayContainer.classList.add('fc-margin-editing');
     clearTimeout(marginEditingTimeout);
@@ -311,7 +311,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
             }
             chatInput.value = '';
             chatInput.blur(); // Always close/unfocus when hitting Enter
-            
+
             // Explicitly return focus to the video player so YouTube shortcuts (Space, F, etc) continue to work
             const videoPlayer = document.querySelector('.html5-video-player');
             if (videoPlayer) {
@@ -491,7 +491,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
       saveSettings();
       updateOverlayMargins();
       updateSafeZonePreview(true);
-      
+
       const zoneSettingsDiv = document.getElementById('fc-zone-settings');
       if (zoneSettingsDiv) {
         zoneSettingsDiv.style.display = settings.zoneEnabled ? 'block' : 'none';
@@ -658,36 +658,36 @@ if (window.location.pathname.startsWith('/live_chat')) {
     // Temporarily append with visibility hidden to calculate dimensions
     msgDiv.style.visibility = 'hidden';
     overlayContainer.appendChild(msgDiv);
-    
+
     const msgWidth = msgDiv.offsetWidth;
     const msgHeight = msgDiv.offsetHeight || (settings.fontSize * 1.3);
     const containerWidth = overlayContainer.clientWidth;
     const containerHeight = overlayContainer.clientHeight;
-    
+
     // Random Speed
     const baseDuration = parseFloat(settings.speed);
     const duration = baseDuration + Math.random() * 2;
     const durationMs = duration * 1000;
-    
+
     // Velocity: pixels per millisecond
     const distance = containerWidth + msgWidth;
     const velocity = distance / durationMs;
-    
+
     // Collision Detection
     let bestTop = 0;
     let maxTop = containerHeight > 0 ? containerHeight - msgHeight : 0;
     if (maxTop < 0) maxTop = 0;
-    
+
     const existingMessages = Array.from(overlayContainer.querySelectorAll('.flow-chat-message:not([style*="visibility: hidden"])'));
-    
-    for (let attempts = 0; attempts < 20; attempts++) {
+
+    for (let attempts = 0; attempts < 1000; attempts++) {
       let testTop = Math.random() * maxTop;
       let collision = false;
-      
+
       for (let existing of existingMessages) {
         let eTop = existing.offsetTop;
         let eHeight = parseFloat(existing.dataset.height) || existing.offsetHeight;
-        
+
         // Vertical Overlap Check
         // Add a small vertical padding (e.g. 10% of font size) to make it less crowded
         const verticalPadding = settings.fontSize * 0.1;
@@ -696,17 +696,17 @@ if (window.location.pathname.startsWith('/live_chat')) {
           let eWidth = parseFloat(existing.dataset.width);
           let eVelocity = parseFloat(existing.dataset.velocity);
           let eStartTime = parseFloat(existing.dataset.startTime);
-          
+
           if (!isNaN(eWidth) && !isNaN(eVelocity) && !isNaN(eStartTime)) {
             let elapsedTime = Date.now() - eStartTime;
             let eRightEdge = containerWidth - (eVelocity * elapsedTime) + eWidth;
-            
+
             // 1. Existing message is still entering the screen
             if (eRightEdge > containerWidth) {
               collision = true;
               break;
             }
-            
+
             // 2. New message is faster and catches up before existing message leaves
             let eTimeRemaining = eRightEdge / eVelocity;
             let nTimeToCross = containerWidth / velocity;
@@ -717,16 +717,16 @@ if (window.location.pathname.startsWith('/live_chat')) {
           }
         }
       }
-      
+
       bestTop = testTop;
       if (!collision) {
         break; // Found a safe spot
       }
     }
-    
+
     msgDiv.style.top = `${bestTop}px`;
     msgDiv.style.visibility = 'visible';
-    
+
     // Save metadata for future collision checks
     msgDiv.dataset.width = msgWidth;
     msgDiv.dataset.height = msgHeight;
@@ -781,23 +781,23 @@ if (window.location.pathname.startsWith('/live_chat')) {
       if (isFullScreen || isYtFullScreen) {
         const chatInput = document.querySelector('.flow-chat-quick-input');
         if (chatInput) {
-          e.preventDefault(); 
+          e.preventDefault();
           e.stopPropagation(); // Stop YouTube from doing anything with Enter
-          
+
           // Wake up the player controls reliably without breaking YouTube's state machine
           if (videoPlayer) {
             const rect = videoPlayer.getBoundingClientRect();
             // Dispatch mousemove with coordinates to trigger YouTube's movement threshold
-            videoPlayer.dispatchEvent(new MouseEvent('mousemove', { 
-              bubbles: true, cancelable: true, clientX: rect.left + 10, clientY: rect.top + 10 
+            videoPlayer.dispatchEvent(new MouseEvent('mousemove', {
+              bubbles: true, cancelable: true, clientX: rect.left + 10, clientY: rect.top + 10
             }));
             setTimeout(() => {
-              videoPlayer.dispatchEvent(new MouseEvent('mousemove', { 
-                bubbles: true, cancelable: true, clientX: rect.left + 50, clientY: rect.top + 50 
+              videoPlayer.dispatchEvent(new MouseEvent('mousemove', {
+                bubbles: true, cancelable: true, clientX: rect.left + 50, clientY: rect.top + 50
               }));
             }, 10);
           }
-          
+
           // Focus after a tiny delay to ensure controls are visible and ready
           setTimeout(() => {
             chatInput.focus();
