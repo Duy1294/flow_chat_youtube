@@ -689,10 +689,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
     const existingMessages = Array.from(overlayContainer.querySelectorAll('.flow-chat-message:not([style*="visibility: hidden"])'));
 
-    for (let attempts = 0; attempts < 1000; attempts++) {
-      let testTop = Math.random() * maxTop;
-      let collision = false;
-
+    const checkCollision = (testTop) => {
       for (let existing of existingMessages) {
         let eTop = existing.offsetTop;
         let eHeight = parseFloat(existing.dataset.height) || existing.offsetHeight;
@@ -712,25 +709,45 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
             // 1. Existing message is still entering the screen
             if (eRightEdge > containerWidth) {
-              collision = true;
-              break;
+              return true;
             }
 
             // 2. New message is faster and catches up before existing message leaves
             let eTimeRemaining = eRightEdge / eVelocity;
             let nTimeToCross = containerWidth / velocity;
             if (eTimeRemaining > nTimeToCross) {
-              collision = true;
-              break;
+              return true;
             }
           }
         }
       }
+      return false;
+    };
 
-      bestTop = testTop;
-      if (!collision) {
+    let foundSpot = false;
+
+    for (let attempts = 0; attempts < 10000; attempts++) {
+      let testTop = Math.random() * maxTop;
+      
+      if (!checkCollision(testTop)) {
+        bestTop = testTop;
+        foundSpot = true;
         break; // Found a safe spot
       }
+    }
+
+    if (!foundSpot) {
+      for (let testTop = 0; testTop <= maxTop; testTop += 2) {
+        if (!checkCollision(testTop)) {
+          bestTop = testTop;
+          foundSpot = true;
+          break; // Found a safe spot
+        }
+      }
+    }
+
+    if (!foundSpot) {
+      bestTop = Math.random() * maxTop;
     }
 
     msgDiv.style.top = `${bestTop}px`;
