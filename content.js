@@ -113,9 +113,21 @@ if (window.location.pathname.startsWith('/live_chat')) {
     }
   });
 
-  // Start observing on document.body so that we don't lose the observer if YouTube 
-  // replaces the chat container (which happens often when switching tabs back and forth).
-  chatObserver.observe(document.body, { childList: true, subtree: true });
+  // Instead of observing document.body with subtree: true (which is very CPU intensive),
+  // we find the specific chat container and observe only its direct children.
+  // We use setInterval to re-attach the observer if YouTube replaces the container.
+  let currentChatList = null;
+  const findAndObserveChat = () => {
+    const chatList = document.querySelector('yt-live-chat-item-list-renderer #items') || document.querySelector('yt-live-chat-item-list-renderer');
+    if (chatList && chatList !== currentChatList) {
+      chatObserver.disconnect();
+      chatObserver.observe(chatList, { childList: true });
+      currentChatList = chatList;
+    }
+  };
+  
+  setInterval(findAndObserveChat, 2000);
+  findAndObserveChat();
 } else {
   // --- MAIN PAGE LOGIC (Video Player) ---
   console.log("Flow Chat: Initializing on main page");
@@ -726,7 +738,8 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
     let foundSpot = false;
 
-    for (let attempts = 0; attempts < 10000; attempts++) {
+    // 1. Try a few random positions first (fastest)
+    for (let attempts = 0; attempts < 5000; attempts++) {
       let testTop = Math.random() * maxTop;
       
       if (!checkCollision(testTop)) {
@@ -736,6 +749,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
       }
     }
 
+    // 2. If random fails, search systematically using larger steps (lanes)
     if (!foundSpot) {
       for (let testTop = 0; testTop <= maxTop; testTop += 2) {
         if (!checkCollision(testTop)) {
@@ -746,6 +760,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
       }
     }
 
+    // 3. Fallback: just place randomly
     if (!foundSpot) {
       bestTop = Math.random() * maxTop;
     }
@@ -834,21 +849,17 @@ if (window.location.pathname.startsWith('/live_chat')) {
     }
   }, { capture: true }); // Use capture to ensure we intercept before YouTube's player stops propagation
 
-  // Keep attempting to setup overlay and settings UI if they are missing
-  let observerTimeout = null;
-  const appObserver = new MutationObserver(() => {
-    if (observerTimeout) return;
-    observerTimeout = setTimeout(() => {
-      observerTimeout = null;
-      if (document.querySelector('.html5-video-player')) {
-        if (!document.getElementById('flow-chat-overlay')) {
-          setupOverlay();
-        }
-        if (!document.querySelector('.flow-chat-ytp-btn')) {
-          injectSettingsUI();
-        }
+  // Keep attempting to setup overlay and settings UI if they are missing.
+  // Using setInterval instead of MutationObserver on document.body(subtree:true)
+  // drastically reduces background CPU load on YouTube's main page.
+  setInterval(() => {
+    if (document.querySelector('.html5-video-player')) {
+      if (!document.getElementById('flow-chat-overlay')) {
+        setupOverlay();
       }
-    }, 500);
-  });
-  appObserver.observe(document.body, { childList: true, subtree: true });
+      if (!document.querySelector('.flow-chat-ytp-btn')) {
+        injectSettingsUI();
+      }
+    }
+  }, 1000);
 }
