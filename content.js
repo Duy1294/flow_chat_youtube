@@ -1,6 +1,25 @@
 // content.js
 let isEnabled = true;
 
+const updateButtonState = (state) => {
+  if (window.location.pathname.startsWith('/live_chat')) return;
+  
+  const btn = document.querySelector('.flow-chat-ytp-btn');
+  const toggleSwitch = document.querySelector('#fc-toggle')?.closest('.flow-chat-switch');
+
+  if (btn) {
+    btn.classList.remove('fc-connecting', 'fc-connected');
+    if (state === 'connecting') btn.classList.add('fc-connecting');
+    if (state === 'connected') btn.classList.add('fc-connected');
+  }
+
+  if (toggleSwitch) {
+    toggleSwitch.classList.remove('fc-connecting', 'fc-connected');
+    if (state === 'connecting') toggleSwitch.classList.add('fc-connecting');
+    if (state === 'connected') toggleSwitch.classList.add('fc-connected');
+  }
+};
+
 // Listen for toggle commands from background
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "action_button_clicked") {
@@ -19,6 +38,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         overlay.style.display = isEnabled ? "block" : "none";
       }
 
+      if (isEnabled) {
+        updateButtonState('connecting');
+      } else {
+        updateButtonState('none');
+      }
 
       // Update UI toggle if it exists
       const fcToggle = document.getElementById('fc-toggle');
@@ -123,6 +147,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
       chatObserver.disconnect();
       chatObserver.observe(chatList, { childList: true });
       currentChatList = chatList;
+      window.parent.postMessage({ type: 'FLOW_CHAT_CONNECTED' }, '*');
     }
   };
   
@@ -518,10 +543,12 @@ if (window.location.pathname.startsWith('/live_chat')) {
       saveSettings();
       if (overlayContainer) overlayContainer.style.display = isEnabled ? "block" : "none";
       if (isEnabled) {
+        updateButtonState('connecting');
         checkAndInjectHiddenChat();
       } else {
         const hiddenIframe = document.getElementById('flow-chat-hidden-iframe');
         if (hiddenIframe) hiddenIframe.remove();
+        updateButtonState('none');
       }
     });
 
@@ -620,7 +647,10 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
     let hiddenIframe = document.getElementById('flow-chat-hidden-iframe');
     if (!hiddenIframe) {
-      const v = new URLSearchParams(window.location.search).get('v');
+      let v = new URLSearchParams(window.location.search).get('v');
+      if (!v && window.location.pathname.startsWith('/live/')) {
+        v = window.location.pathname.split('/')[2];
+      }
       if (v) {
         hiddenIframe = document.createElement('iframe');
         hiddenIframe.id = 'flow-chat-hidden-iframe';
@@ -646,6 +676,11 @@ if (window.location.pathname.startsWith('/live_chat')) {
   const seenMessageIds = new Set();
 
   window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'FLOW_CHAT_CONNECTED' && isEnabled) {
+      updateButtonState('connected');
+      return;
+    }
+
     // Restore focus to video player when iframe finishes sending chat
     if (event.data && event.data.type === 'CHAT_MESSAGE_SENT_RESTORE_FOCUS') {
       const videoPlayer = document.querySelector('.html5-video-player');

@@ -158,6 +158,22 @@ input:checked+.flow-chat-slider:before {
   background-color: #3ea6ff;
 }
 
+.flow-chat-switch.fc-connecting input:checked+.flow-chat-slider {
+  background-color: #fbd38d;
+}
+
+.flow-chat-switch.fc-connecting input:checked+.flow-chat-slider:before {
+  background-color: #ed8936; /* Orange */
+}
+
+.flow-chat-switch.fc-connected input:checked+.flow-chat-slider {
+  background-color: #9ae6b4;
+}
+
+.flow-chat-switch.fc-connected input:checked+.flow-chat-slider:before {
+  background-color: #48bb78; /* Green */
+}
+
 /* Range Inputs */
 .flow-chat-setting-item input[type=range] {
   -webkit-appearance: none;
@@ -243,4 +259,15 @@ input:checked+.flow-chat-slider:before {
 /* Prevent ghost text cursor when toolbar is hidden */
 .ytp-autohide .flow-chat-quick-input:not(:focus) {
   pointer-events: none !important;
+}
+
+/* Flow Chat Button Status Colors */
+.flow-chat-ytp-btn.fc-connecting .ytp-svg-fill {
+  fill: #fb923c !important;
+  transition: fill 0.3s ease;
+}
+
+.flow-chat-ytp-btn.fc-connected .ytp-svg-fill {
+  fill: #4ade80 !important;
+  transition: fill 0.3s ease;
 }
