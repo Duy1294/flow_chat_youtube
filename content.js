@@ -128,6 +128,24 @@ if (window.location.pathname.startsWith('/live_chat')) {
   
   setInterval(findAndObserveChat, 2000);
   findAndObserveChat();
+
+  // Prevent YouTube from pausing the chat stream (ngắt tin nhắn giữa chừng) 
+  // by keeping it scrolled to the bottom and clicking the 'show more' button if it appears.
+  setInterval(() => {
+    const scroller = document.querySelector('#item-scroller');
+    if (scroller && scroller.scrollHeight > scroller.clientHeight) {
+      // If we are not at the bottom, force scroll to bottom to resume chat
+      if (scroller.scrollHeight - scroller.scrollTop > scroller.clientHeight + 50) {
+        scroller.scrollTop = scroller.scrollHeight;
+      }
+    }
+    
+    // Sometimes YouTube shows a floating "More messages" button when chat pauses
+    const showMoreBtn = document.querySelector('#show-more');
+    if (showMoreBtn && showMoreBtn.style.display !== 'none' && !showMoreBtn.hasAttribute('hidden')) {
+      showMoreBtn.click();
+    }
+  }, 2500);
 } else {
   // --- MAIN PAGE LOGIC (Video Player) ---
   console.log("Flow Chat: Initializing on main page");
@@ -590,8 +608,9 @@ if (window.location.pathname.startsWith('/live_chat')) {
     });
   };
 
-  // Restore hidden chat ONLY for actual live streams.
-  // VOD replays require complex time-sync that YouTube blocks when the original iframe is destroyed.
+  // Restore hidden chat when enabled.
+  // We no longer rely on the isLiveBroadcast meta tag because YouTube's SPA (Polymer)
+  // does not reliably update it during navigation, causing the chat to fail until F5.
   function checkAndInjectHiddenChat() {
     if (!isEnabled) {
       const hiddenIframe = document.getElementById('flow-chat-hidden-iframe');
@@ -599,27 +618,24 @@ if (window.location.pathname.startsWith('/live_chat')) {
       return;
     }
 
-    const isLive = document.querySelector('meta[itemprop="isLiveBroadcast"]');
-    if (isLive) {
-      let hiddenIframe = document.getElementById('flow-chat-hidden-iframe');
-      if (!hiddenIframe) {
-        const v = new URLSearchParams(window.location.search).get('v');
-        if (v) {
-          hiddenIframe = document.createElement('iframe');
-          hiddenIframe.id = 'flow-chat-hidden-iframe';
-          hiddenIframe.src = `/live_chat?is_popout=1&v=${v}`;
-          hiddenIframe.style.position = 'fixed';
-          hiddenIframe.style.width = '350px';
-          hiddenIframe.style.height = '600px';
-          hiddenIframe.style.opacity = '0.01'; // Virtually invisible
-          hiddenIframe.style.pointerEvents = 'none'; // Unclickable
-          hiddenIframe.style.top = '100px';
-          hiddenIframe.style.left = '0';
-          hiddenIframe.style.zIndex = '-999';
+    let hiddenIframe = document.getElementById('flow-chat-hidden-iframe');
+    if (!hiddenIframe) {
+      const v = new URLSearchParams(window.location.search).get('v');
+      if (v) {
+        hiddenIframe = document.createElement('iframe');
+        hiddenIframe.id = 'flow-chat-hidden-iframe';
+        hiddenIframe.src = `/live_chat?is_popout=1&v=${v}`;
+        hiddenIframe.style.position = 'fixed';
+        hiddenIframe.style.width = '350px';
+        hiddenIframe.style.height = '600px';
+        hiddenIframe.style.opacity = '0.01'; // Virtually invisible
+        hiddenIframe.style.pointerEvents = 'none'; // Unclickable
+        hiddenIframe.style.top = '100px';
+        hiddenIframe.style.left = '0';
+        hiddenIframe.style.zIndex = '-999';
 
-          document.body.appendChild(hiddenIframe);
-          console.log("Flow Chat: Hidden Live Chat iframe injected");
-        }
+        document.body.appendChild(hiddenIframe);
+        console.log("Flow Chat: Hidden Live Chat iframe injected");
       }
     }
   }
