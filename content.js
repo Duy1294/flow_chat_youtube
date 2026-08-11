@@ -228,6 +228,8 @@ if (window.location.pathname.startsWith('/live_chat')) {
     if (fcToggle) {
       fcToggle.checked = false;
     }
+    
+    updateButtonState('none');
 
   });
 
