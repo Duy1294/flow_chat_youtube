@@ -432,82 +432,75 @@ const injectSettingsUI = (videoPlayer) => {
   });
 };
 
-const createDanmaku = (html) => {
-  if (document.hidden || !overlayContainer || !ctx) return;
+const MAX_POOL_SIZE = 100;
+const domPool = [];
 
-  const { tokens, totalWidth } = parseHTMLToTokens(html);
-  const msgWidth = totalWidth;
-  const msgHeight = settings.fontSize * 1.5; 
-  const containerWidth = overlayContainer.clientWidth;
-  const containerHeight = overlayContainer.clientHeight;
+const getMessageDiv = () => {
+  if (domPool.length > 0) {
+    return domPool.pop();
+  }
+  const div = document.createElement('div');
+  div.className = 'flow-chat-message';
+  return div;
+};
+
+const releaseMessageDiv = (div) => {
+  div.remove();
+  div.innerHTML = '';
+  div.className = 'flow-chat-message';
+  div.style.cssText = '';
+  if (domPool.length < MAX_POOL_SIZE) {
+    domPool.push(div);
+  }
+};
+
+const createDanmaku = (html) => {
+  // Đảm bảo overlayContainer luôn hợp lệ
+  if (!overlayContainer || !document.body.contains(overlayContainer)) {
+      setupOverlay();
+  }
+  if (document.hidden || !overlayContainer) return;
+
+  const msgDiv = getMessageDiv();
+  msgDiv.className = 'flow-chat-message';
+  if (settings.radiantStroke) {
+    msgDiv.classList.add('radiant-stroke');
+  }
+  
+  msgDiv.innerHTML = html; 
+  msgDiv.style.fontSize = `${settings.fontSize}px`;
+  // Custom styles for outside youtube
+  msgDiv.style.fontFamily = "Roboto, Arial, sans-serif";
+
+  // Randomize vertical position dynamically based on font size to prevent cutoff
+  let maxTop = 95; 
+  if (overlayContainer && overlayContainer.clientHeight > 0) {
+    const msgHeightPx = settings.fontSize * 1.3; 
+    const msgHeightPercent = (msgHeightPx / overlayContainer.clientHeight) * 100;
+    maxTop = 100 - msgHeightPercent;
+    if (maxTop < 0) maxTop = 0;
+  }
+  const topPercent = Math.random() * maxTop;
+  msgDiv.style.top = `${topPercent}%`;
+
+  overlayContainer.appendChild(msgDiv);
 
   const baseDuration = parseFloat(settings.speed);
   const duration = baseDuration + Math.random() * 2;
   const durationMs = duration * 1000;
 
-  const distance = containerWidth + msgWidth;
-  const velocity = distance / durationMs;
-
-  let bestTop = 0;
-  let maxTop = containerHeight > 0 ? containerHeight - msgHeight : 0;
-  if (maxTop < 0) maxTop = 0;
-
-  const checkCollision = (testTop) => {
-    for (let existing of activeMessages) {
-      let eTop = existing.y;
-      let eHeight = existing.height;
-
-      const verticalPadding = settings.fontSize * 0.1;
-      if (testTop < eTop + eHeight + verticalPadding && testTop + msgHeight + verticalPadding > eTop) {
-        let eRightEdge = existing.x + existing.width;
-
-        if (eRightEdge > containerWidth) {
-          return true;
-        }
-
-        let eTimeRemaining = eRightEdge / existing.velocity;
-        let nTimeToCross = containerWidth / velocity;
-        if (eTimeRemaining > nTimeToCross) {
-          return true;
-        }
-      }
-    }
-    return false;
-  };
-
-  let foundSpot = false;
-
-  for (let attempts = 0; attempts < 50; attempts++) {
-    let testTop = Math.random() * maxTop;
-    if (!checkCollision(testTop)) {
-      bestTop = testTop;
-      foundSpot = true;
-      break;
-    }
-  }
-
-  if (!foundSpot) {
-    for (let testTop = 0; testTop <= maxTop; testTop += 2) {
-      if (!checkCollision(testTop)) {
-        bestTop = testTop;
-        foundSpot = true;
-        break;
-      }
-    }
-  }
-
-  if (!foundSpot) {
-    bestTop = Math.random() * maxTop;
-  }
-
-  activeMessages.push({
-    tokens: tokens,
-    width: msgWidth,
-    height: msgHeight,
-    x: containerWidth,
-    y: bestTop,
-    velocity: velocity
+  const animation = msgDiv.animate([
+    { transform: 'translateX(100cqw)' },
+    { transform: 'translateX(-100%)' }
+  ], {
+    duration: durationMs,
+    easing: 'linear',
+    fill: 'forwards'
   });
+
+  animation.onfinish = () => {
+    releaseMessageDiv(msgDiv);
+  };
 };
 
 function startObserving() {

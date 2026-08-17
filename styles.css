@@ -32,6 +32,7 @@
 }
 
 .flow-chat-message {
+  contain: layout paint;
   position: absolute;
   white-space: nowrap;
   color: #ffffff;

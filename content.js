@@ -749,12 +749,34 @@ if (window.location.pathname.startsWith('/live_chat')) {
     }
   });
 
+  const MAX_POOL_SIZE = 100;
+  const domPool = [];
+
+  const getMessageDiv = () => {
+    if (domPool.length > 0) {
+      return domPool.pop();
+    }
+    const div = document.createElement('div');
+    div.className = 'flow-chat-message';
+    return div;
+  };
+
+  const releaseMessageDiv = (div) => {
+    div.remove();
+    div.innerHTML = '';
+    div.className = 'flow-chat-message';
+    div.style.cssText = '';
+    if (domPool.length < MAX_POOL_SIZE) {
+      domPool.push(div);
+    }
+  };
+
   const createDanmaku = (html) => {
     // If the tab is hidden, don't create new danmaku to avoid them clumping together 
     // or disappearing instantly when the user returns.
     if (document.hidden) return;
 
-    const msgDiv = document.createElement('div');
+    const msgDiv = getMessageDiv();
     msgDiv.className = 'flow-chat-message';
     if (settings.radiantStroke) {
       msgDiv.classList.add('radiant-stroke');
@@ -872,7 +894,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
     // Clean up after animation finishes
     animation.onfinish = () => {
-      msgDiv.remove();
+      releaseMessageDiv(msgDiv);
     };
   };
 
