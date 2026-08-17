@@ -30,6 +30,9 @@ chrome.storage.local.get(['flowChatSettings'], (result) => {
   }
   isEnabled = settings.enabled;
   
+  // Try to setup overlay and UI button regardless of enabled state
+  setupOverlay();
+  
   if (isEnabled) {
       startObserving();
   }
@@ -573,14 +576,25 @@ document.addEventListener('visibilitychange', () => {
 // Liên tục kiểm tra xem trang web có xóa mất overlay của chúng ta khi chuyển sang fullscreen không
 // (Nhiều trang web có thói quen xóa hoặc render lại toàn bộ player khi ấn fullscreen)
 setInterval(() => {
+  const videoPlayer = document.querySelector('.dplayer-video-wrap') || document.querySelector('.dplayer') || document.querySelector('.video-wrapper') || document.querySelector('.box-livestream-video') || document.querySelector('video')?.parentElement;
+
   if (isEnabled) {
-    const videoPlayer = document.querySelector('.dplayer-video-wrap') || document.querySelector('.dplayer') || document.querySelector('.video-wrapper') || document.querySelector('.box-livestream-video') || document.querySelector('video')?.parentElement;
     const overlay = document.getElementById('flow-chat-overlay');
     
     if (!overlay || !document.body.contains(overlay)) {
-      if (videoPlayer) setupOverlay();
-    } else if (videoPlayer && overlay.parentElement !== videoPlayer) {
+      overlayContainer = null;
       setupOverlay();
+    } else if (overlay.parentElement !== videoPlayer) {
+      // Re-attach overlay if player was recreated
+      if (videoPlayer) {
+        videoPlayer.appendChild(overlay);
+        updateOverlayMargins();
+      }
     }
   }
-}, 1000);
+
+  // Always re-attach UI if missing, even when disabled
+  if (videoPlayer && !document.querySelector('.flow-chat-gv-ui')) {
+      injectSettingsUI(videoPlayer);
+  }
+}, 2000);
