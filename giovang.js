@@ -15,7 +15,12 @@ let settings = {
   marginLeft: 0,
   marginRight: 0,
   radiantStroke: false,
-  strokeSize: 1
+  strokeSize: 1,
+  zoneEnabled: false,
+  zoneX: 0,
+  zoneY: 0,
+  zoneW: 20,
+  zoneH: 20
 };
 
 // Load settings from storage
@@ -61,6 +66,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (overlayContainer) {
       overlayContainer.style.display = isEnabled ? "block" : "none";
+      overlayContainer.style.setProperty('--fc-opacity', settings.opacity / 100);
     } else if (isEnabled) {
       setupOverlay();
     }
@@ -77,6 +83,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+let safeZonePreview = null;
+const updateSafeZonePreview = (show) => {
+  if (!safeZonePreview) {
+    const videoPlayer = document.querySelector('.dplayer-video-wrap') || document.querySelector('.dplayer') || document.querySelector('.video-wrapper') || document.querySelector('.box-livestream-video') || document.querySelector('video')?.parentElement;
+    if (!videoPlayer) return;
+    safeZonePreview = document.createElement('div');
+    safeZonePreview.className = 'flow-chat-safe-zone-preview';
+    videoPlayer.appendChild(safeZonePreview);
+  }
+
+  if (show && settings.zoneEnabled) {
+    safeZonePreview.style.display = 'block';
+    safeZonePreview.style.left = settings.zoneX + '%';
+    safeZonePreview.style.top = settings.zoneY + '%';
+    safeZonePreview.style.width = settings.zoneW + '%';
+    safeZonePreview.style.height = settings.zoneH + '%';
+
+    clearTimeout(safeZonePreview.timeout);
+    safeZonePreview.timeout = setTimeout(() => {
+      safeZonePreview.style.display = 'none';
+    }, 2000);
+  } else {
+    if (safeZonePreview) safeZonePreview.style.display = 'none';
+  }
+};
+
 let marginEditingTimeout;
 const updateOverlayMargins = () => {
   if (!overlayContainer) return;
@@ -87,6 +119,41 @@ const updateOverlayMargins = () => {
   overlayContainer.style.setProperty('--fc-stroke', settings.strokeSize + 'px');
   overlayContainer.style.width = 'auto';
   overlayContainer.style.height = 'auto';
+  
+  if (settings.zoneEnabled) {
+    const zX = parseFloat(settings.zoneX);
+    const zY = parseFloat(settings.zoneY);
+    const zW = parseFloat(settings.zoneW);
+    const zH = parseFloat(settings.zoneH);
+
+    const mT = parseFloat(settings.marginTop) || 0;
+    const mB = parseFloat(settings.marginBottom) || 0;
+    const mL = parseFloat(settings.marginLeft) || 0;
+    const mR = parseFloat(settings.marginRight) || 0;
+
+    const contWidth = 100 - mL - mR;
+    const contHeight = 100 - mT - mB;
+    
+    const cX = contWidth > 0 ? ((zX - mL) / contWidth) * 100 : 0;
+    const cY = contHeight > 0 ? ((zY - mT) / contHeight) * 100 : 0;
+    const cW = contWidth > 0 ? (zW / contWidth) * 100 : 0;
+    const cH = contHeight > 0 ? (zH / contHeight) * 100 : 0;
+
+    overlayContainer.style.clipPath = `polygon(
+      0% 0%, 
+      0% 100%, 
+      ${cX}% 100%, 
+      ${cX}% ${cY}%, 
+      ${cX + cW}% ${cY}%, 
+      ${cX + cW}% ${cY + cH}%, 
+      ${cX}% ${cY + cH}%, 
+      ${cX}% 100%, 
+      100% 100%, 
+      100% 0%
+    )`;
+  } else {
+    overlayContainer.style.clipPath = 'none';
+  }
   
   // Show visual guide line when editing margins
   overlayContainer.classList.add('fc-margin-editing');
@@ -104,7 +171,7 @@ const setupOverlay = () => {
     console.log("Flow Chat: Found video player, injecting overlay into", videoPlayer.className);
     overlayContainer = document.createElement('div');
     overlayContainer.id = 'flow-chat-overlay';
-    overlayContainer.className = 'flow-chat-overlay';
+    overlayContainer.className = 'flow-chat-overlay giovang-overlay';
 
     overlayContainer.style.display = settings.enabled ? "block" : "none";
     overlayContainer.style.setProperty('--fc-opacity', settings.opacity / 100);
@@ -181,6 +248,41 @@ const injectSettingsUI = (videoPlayer) => {
             <input type="checkbox" id="fc-toggle" ${settings.enabled ? 'checked' : ''}>
             <span class="flow-chat-slider"></span>
           </label>
+        </div>
+      </div>
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Safe Zone (Né chữ)</span>
+          <label class="flow-chat-switch">
+            <input type="checkbox" id="fc-zone-toggle" ${settings.zoneEnabled ? 'checked' : ''}>
+            <span class="flow-chat-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div id="fc-zone-settings" style="display: ${settings.zoneEnabled ? 'block' : 'none'}">
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Zone X (<span id="fc-zx-val">${settings.zoneX}</span>%)</span>
+          </div>
+          <input type="range" id="fc-zx" min="0" max="100" step="0.1" value="${settings.zoneX}">
+        </div>
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Zone Y (<span id="fc-zy-val">${settings.zoneY}</span>%)</span>
+          </div>
+          <input type="range" id="fc-zy" min="0" max="100" step="0.1" value="${settings.zoneY}">
+        </div>
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Zone Width (<span id="fc-zw-val">${settings.zoneW}</span>%)</span>
+          </div>
+          <input type="range" id="fc-zw" min="0" max="100" step="0.1" value="${settings.zoneW}">
+        </div>
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Zone Height (<span id="fc-zh-val">${settings.zoneH}</span>%)</span>
+          </div>
+          <input type="range" id="fc-zh" min="0" max="100" step="0.1" value="${settings.zoneH}">
         </div>
       </div>
       <div class="flow-chat-setting-item">
@@ -280,6 +382,29 @@ const injectSettingsUI = (videoPlayer) => {
     }
   });
 
+  document.getElementById('fc-zone-toggle').addEventListener('change', (e) => {
+    settings.zoneEnabled = e.target.checked;
+    saveSettings();
+    updateOverlayMargins();
+    updateSafeZonePreview(true);
+
+    const zoneSettingsDiv = document.getElementById('fc-zone-settings');
+    if (zoneSettingsDiv) {
+      zoneSettingsDiv.style.display = settings.zoneEnabled ? 'block' : 'none';
+    }
+  });
+
+  ['zx', 'zy', 'zw', 'zh'].forEach(prop => {
+    document.getElementById(`fc-${prop}`).addEventListener('input', (e) => {
+      const key = prop === 'zx' ? 'zoneX' : prop === 'zy' ? 'zoneY' : prop === 'zw' ? 'zoneW' : 'zoneH';
+      settings[key] = e.target.value;
+      document.getElementById(`fc-${prop}-val`).innerText = settings[key];
+      saveSettings();
+      updateOverlayMargins();
+      updateSafeZonePreview(true);
+    });
+  });
+
   document.getElementById('fc-radiant-toggle').addEventListener('change', (e) => {
     settings.radiantStroke = e.target.checked;
     saveSettings();
@@ -308,53 +433,81 @@ const injectSettingsUI = (videoPlayer) => {
 };
 
 const createDanmaku = (html) => {
-  // Đảm bảo overlayContainer luôn hợp lệ
-  if (!overlayContainer || !document.body.contains(overlayContainer)) {
-      setupOverlay();
-  }
-  if (document.hidden || !overlayContainer) return;
+  if (document.hidden || !overlayContainer || !ctx) return;
 
-  const msgDiv = document.createElement('div');
-  msgDiv.className = 'flow-chat-message';
-  if (settings.radiantStroke) {
-    msgDiv.classList.add('radiant-stroke');
-  }
-  
-  // Basic sanitization or direct insertion. Assuming the chat DOM is safe or we just want text.
-  msgDiv.innerHTML = html; 
-
-  msgDiv.style.fontSize = `${settings.fontSize}px`;
-
-  // Randomize vertical position dynamically based on font size to prevent cutoff
-  let maxTop = 95; // Default safe fallback
-  if (overlayContainer && overlayContainer.clientHeight > 0) {
-    // Estimated height of a message is roughly fontSize * 1.3
-    const msgHeightPx = settings.fontSize * 1.3; 
-    const msgHeightPercent = (msgHeightPx / overlayContainer.clientHeight) * 100;
-    maxTop = 100 - msgHeightPercent;
-    if (maxTop < 0) maxTop = 0;
-  }
-  const topPercent = Math.random() * maxTop;
-  msgDiv.style.top = `${topPercent}%`;
-
-  overlayContainer.appendChild(msgDiv);
+  const { tokens, totalWidth } = parseHTMLToTokens(html);
+  const msgWidth = totalWidth;
+  const msgHeight = settings.fontSize * 1.5; 
+  const containerWidth = overlayContainer.clientWidth;
+  const containerHeight = overlayContainer.clientHeight;
 
   const baseDuration = parseFloat(settings.speed);
   const duration = baseDuration + Math.random() * 2;
   const durationMs = duration * 1000;
 
-  const animation = msgDiv.animate([
-    { transform: 'translateX(100cqw)' },
-    { transform: 'translateX(-100%)' }
-  ], {
-    duration: durationMs,
-    easing: 'linear',
-    fill: 'forwards'
-  });
+  const distance = containerWidth + msgWidth;
+  const velocity = distance / durationMs;
 
-  animation.onfinish = () => {
-    msgDiv.remove();
+  let bestTop = 0;
+  let maxTop = containerHeight > 0 ? containerHeight - msgHeight : 0;
+  if (maxTop < 0) maxTop = 0;
+
+  const checkCollision = (testTop) => {
+    for (let existing of activeMessages) {
+      let eTop = existing.y;
+      let eHeight = existing.height;
+
+      const verticalPadding = settings.fontSize * 0.1;
+      if (testTop < eTop + eHeight + verticalPadding && testTop + msgHeight + verticalPadding > eTop) {
+        let eRightEdge = existing.x + existing.width;
+
+        if (eRightEdge > containerWidth) {
+          return true;
+        }
+
+        let eTimeRemaining = eRightEdge / existing.velocity;
+        let nTimeToCross = containerWidth / velocity;
+        if (eTimeRemaining > nTimeToCross) {
+          return true;
+        }
+      }
+    }
+    return false;
   };
+
+  let foundSpot = false;
+
+  for (let attempts = 0; attempts < 50; attempts++) {
+    let testTop = Math.random() * maxTop;
+    if (!checkCollision(testTop)) {
+      bestTop = testTop;
+      foundSpot = true;
+      break;
+    }
+  }
+
+  if (!foundSpot) {
+    for (let testTop = 0; testTop <= maxTop; testTop += 2) {
+      if (!checkCollision(testTop)) {
+        bestTop = testTop;
+        foundSpot = true;
+        break;
+      }
+    }
+  }
+
+  if (!foundSpot) {
+    bestTop = Math.random() * maxTop;
+  }
+
+  activeMessages.push({
+    tokens: tokens,
+    width: msgWidth,
+    height: msgHeight,
+    x: containerWidth,
+    y: bestTop,
+    velocity: velocity
+  });
 };
 
 function startObserving() {

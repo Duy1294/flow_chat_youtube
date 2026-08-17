@@ -69,6 +69,16 @@
   vertical-align: middle;
 }
 
+.flow-chat-message img {
+  max-height: 1.5em;
+  width: auto;
+  vertical-align: middle;
+}
+
+.giovang-overlay .flow-chat-message img {
+  max-height: 5em;
+}
+
 /* Flow Chat Settings UI */
 .flow-chat-settings-panel {
   display: none;

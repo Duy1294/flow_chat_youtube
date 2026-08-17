@@ -191,7 +191,8 @@ if (window.location.pathname.startsWith('/live_chat')) {
     zoneX: 0,
     zoneY: 0,
     zoneW: 20,
-    zoneH: 20
+    zoneH: 20,
+    filteredWords: ""
   };
 
   // Load settings from storage
@@ -507,6 +508,12 @@ if (window.location.pathname.startsWith('/live_chat')) {
         </div>
         <input type="range" id="fc-mr" min="0" max="95" step="0.1" value="${settings.marginRight}">
       </div>
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Lọc từ (ngăn cách bằng dấu phẩy)</span>
+        </div>
+        <input type="text" id="fc-filter-words" style="width: 100%; box-sizing: border-box; margin-top: 5px; background: rgba(0,0,0,0.5); color: white; border: 1px solid #ccc; border-radius: 4px; padding: 4px;" value="${settings.filteredWords || ''}">
+      </div>
     `;
 
     const playerContainer = document.querySelector('.html5-video-player');
@@ -635,6 +642,11 @@ if (window.location.pathname.startsWith('/live_chat')) {
       saveSettings();
       updateOverlayMargins();
     });
+
+    document.getElementById('fc-filter-words').addEventListener('input', (e) => {
+      settings.filteredWords = e.target.value;
+      saveSettings();
+    });
   };
 
   // Restore hidden chat when enabled.
@@ -706,6 +718,27 @@ if (window.location.pathname.startsWith('/live_chat')) {
         if (seenMessageIds.size > 500) {
           const firstItem = seenMessageIds.values().next().value;
           seenMessageIds.delete(firstItem);
+        }
+      }
+
+      if (settings.filteredWords && settings.filteredWords.trim() !== '') {
+        const filterList = settings.filteredWords.split(',').map(w => w.trim()).filter(w => w !== '');
+        if (filterList.length > 0) {
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = event.data.html;
+          
+          const walk = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
+          let node;
+          while (node = walk.nextNode()) {
+            let text = node.nodeValue;
+            for (let word of filterList) {
+              const regex = new RegExp(word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'gi');
+              text = text.replace(regex, '');
+            }
+            node.nodeValue = text;
+          }
+
+          event.data.html = tempDiv.innerHTML;
         }
       }
 
