@@ -749,13 +749,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
     }
   });
 
-  const MAX_POOL_SIZE = 100;
-  const domPool = [];
-
   const getMessageDiv = () => {
-    if (domPool.length > 0) {
-      return domPool.pop();
-    }
     const div = document.createElement('div');
     div.className = 'flow-chat-message';
     return div;
@@ -763,12 +757,6 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
   const releaseMessageDiv = (div) => {
     div.remove();
-    div.innerHTML = '';
-    div.className = 'flow-chat-message';
-    div.style.cssText = '';
-    if (domPool.length < MAX_POOL_SIZE) {
-      domPool.push(div);
-    }
   };
 
   const createDanmaku = (html) => {
@@ -847,7 +835,8 @@ if (window.location.pathname.startsWith('/live_chat')) {
     let foundSpot = false;
 
     // 1. Try a few random positions first (fastest)
-    for (let attempts = 0; attempts < 5000; attempts++) {
+    const maxAttempts = Math.floor(maxTop * 0.1);
+    for (let attempts = 0; attempts < maxAttempts; attempts++) {
       let testTop = Math.random() * maxTop;
       
       if (!checkCollision(testTop)) {
@@ -884,8 +873,8 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
     // Use Web Animations API
     const animation = msgDiv.animate([
-      { transform: 'translateX(100cqw)' },
-      { transform: 'translateX(-100%)' }
+      { transform: `translateX(${containerWidth}px)` },
+      { transform: `translateX(-${msgWidth}px)` }
     ], {
       duration: durationMs, // API uses milliseconds
       easing: 'linear',

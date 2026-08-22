@@ -10,7 +10,6 @@
   overflow: hidden;
   z-index: 9999;
   /* Ensure it stays on top of the video */
-  container-type: inline-size;
   transition: background-color 0.3s ease, border 0.3s ease;
 }
 
