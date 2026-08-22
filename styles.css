@@ -98,6 +98,17 @@
 
 .flow-chat-settings-panel.active {
   display: block;
+  cursor: move;
+}
+
+.flow-chat-settings-panel.fc-dragging {
+  cursor: grabbing;
+}
+
+.flow-chat-settings-panel input,
+.flow-chat-settings-panel label,
+.flow-chat-settings-panel .flow-chat-switch {
+  cursor: pointer;
 }
 
 .flow-chat-setting-item {

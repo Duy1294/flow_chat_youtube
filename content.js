@@ -192,7 +192,8 @@ if (window.location.pathname.startsWith('/live_chat')) {
     zoneY: 0,
     zoneW: 20,
     zoneH: 20,
-    filteredWords: ""
+    filteredWords: "",
+    antiOverlap: false
   };
 
   // Load settings from storage
@@ -404,7 +405,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
     const panel = document.createElement('div');
     panel.className = 'flow-chat-settings-panel';
     // Make panel scrollable in case there are many settings
-    panel.style.maxHeight = '400px';
+    panel.style.maxHeight = '65vh';
     panel.style.overflowY = 'auto';
     panel.innerHTML = `
       <div class="flow-chat-setting-item">
@@ -412,6 +413,15 @@ if (window.location.pathname.startsWith('/live_chat')) {
           <span>Flow Chat</span>
           <label class="flow-chat-switch">
             <input type="checkbox" id="fc-toggle" ${settings.enabled ? 'checked' : ''}>
+            <span class="flow-chat-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Anti-Overlap</span>
+          <label class="flow-chat-switch">
+            <input type="checkbox" id="fc-overlap-toggle" ${settings.antiOverlap ? 'checked' : ''}>
             <span class="flow-chat-slider"></span>
           </label>
         </div>
@@ -510,11 +520,58 @@ if (window.location.pathname.startsWith('/live_chat')) {
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
-          <span>Lọc từ (ngăn cách bằng dấu phẩy)</span>
+          <span>Filter Words (comma separated)</span>
         </div>
-        <input type="text" id="fc-filter-words" style="width: 100%; box-sizing: border-box; margin-top: 5px; background: rgba(0,0,0,0.5); color: white; border: 1px solid #ccc; border-radius: 4px; padding: 4px;" value="${settings.filteredWords || ''}">
+        <input type="text" id="fc-filter-words" placeholder="None" style="width: 100%; box-sizing: border-box; margin-top: 5px; background: rgba(0,0,0,0.5); color: white; border: 1px solid #ccc; border-radius: 4px; padding: 4px;" value="${settings.filteredWords || ''}">
       </div>
     `;
+
+    // Draggable panel logic
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let initialLeft = 0;
+    let initialTop = 0;
+
+    panel.addEventListener('mousedown', (e) => {
+      const isInteractive = e.target.tagName === 'INPUT' || 
+                            e.target.tagName === 'LABEL' || 
+                            e.target.closest('.flow-chat-switch');
+      if (isInteractive) return;
+      if (e.offsetX > panel.clientWidth) return; // Prevent drag on scrollbar
+
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      
+      const rect = panel.getBoundingClientRect();
+      panel.style.bottom = 'auto';
+      panel.style.right = 'auto';
+      panel.style.left = rect.left + 'px';
+      panel.style.top = rect.top + 'px';
+      
+      initialLeft = rect.left;
+      initialTop = rect.top;
+      
+      panel.classList.add('fc-dragging');
+      document.body.style.userSelect = 'none';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+      panel.style.left = (initialLeft + dx) + 'px';
+      panel.style.top = (initialTop + dy) + 'px';
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        panel.classList.remove('fc-dragging');
+        document.body.style.userSelect = '';
+      }
+    });
 
     const playerContainer = document.querySelector('.html5-video-player');
     if (playerContainer) {
@@ -524,6 +581,15 @@ if (window.location.pathname.startsWith('/live_chat')) {
     // Toggle menu visibility
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      
+      // If we are opening the panel, reset its dragged position to default
+      if (!panel.classList.contains('active')) {
+        panel.style.left = '';
+        panel.style.top = '';
+        panel.style.bottom = '';
+        panel.style.right = '';
+      }
+      
       panel.classList.toggle('active');
     });
 
@@ -570,6 +636,14 @@ if (window.location.pathname.startsWith('/live_chat')) {
       const zoneSettingsDiv = document.getElementById('fc-zone-settings');
       if (zoneSettingsDiv) {
         zoneSettingsDiv.style.display = settings.zoneEnabled ? 'block' : 'none';
+      }
+    });
+
+    document.getElementById('fc-overlap-toggle').addEventListener('change', (e) => {
+      settings.antiOverlap = e.target.checked;
+      saveSettings();
+      if (!settings.antiOverlap) {
+        danmakuQueue.length = 0; // Clear queue if disabled
       }
     });
 
@@ -759,11 +833,43 @@ if (window.location.pathname.startsWith('/live_chat')) {
     div.remove();
   };
 
+  let danmakuQueue = [];
+  const maxQueueSize = 100;
+
+  setInterval(() => {
+    if (document.hidden || danmakuQueue.length === 0 || !overlayContainer || !settings.antiOverlap) {
+      if (!settings.antiOverlap && danmakuQueue.length > 0) danmakuQueue.length = 0;
+      return;
+    }
+    
+    let itemsToProcess = Math.min(danmakuQueue.length, 5);
+    let itemsKept = [];
+    
+    for (let i = 0; i < itemsToProcess; i++) {
+        let item = danmakuQueue.shift();
+        if (Date.now() - item.time > 15000) continue; // Expire after 15s
+        
+        let spawned = attemptSpawn(item.html);
+        if (!spawned) itemsKept.push(item);
+    }
+    
+    if (itemsKept.length > 0) {
+        danmakuQueue.unshift(...itemsKept);
+    }
+  }, 250);
+
   const createDanmaku = (html) => {
-    // If the tab is hidden, don't create new danmaku to avoid them clumping together 
-    // or disappearing instantly when the user returns.
     if (document.hidden) return;
 
+    let spawned = attemptSpawn(html);
+    if (!spawned && settings.antiOverlap) {
+      if (danmakuQueue.length < maxQueueSize) {
+        danmakuQueue.push({ html, time: Date.now() });
+      }
+    }
+  };
+
+  const attemptSpawn = (html) => {
     const msgDiv = getMessageDiv();
     msgDiv.className = 'flow-chat-message';
     if (settings.radiantStroke) {
@@ -859,6 +965,10 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
     // 3. Fallback: just place randomly
     if (!foundSpot) {
+      if (settings.antiOverlap) {
+        msgDiv.remove();
+        return false;
+      }
       bestTop = Math.random() * maxTop;
     }
 
@@ -885,6 +995,8 @@ if (window.location.pathname.startsWith('/live_chat')) {
     animation.onfinish = () => {
       releaseMessageDiv(msgDiv);
     };
+
+    return true;
   };
 
   // Handle visibility change so danmaku pauses when the user switches tabs.
