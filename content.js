@@ -835,7 +835,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
     let foundSpot = false;
 
     // 1. Try a few random positions first (fastest)
-    const maxAttempts = Math.floor(maxTop * 0.1);
+    const maxAttempts = Math.floor(maxTop);
     for (let attempts = 0; attempts < maxAttempts; attempts++) {
       let testTop = Math.random() * maxTop;
       
@@ -958,5 +958,5 @@ if (window.location.pathname.startsWith('/live_chat')) {
         injectSettingsUI();
       }
     }
-  }, 1000);
+  }, 5000);
 }
