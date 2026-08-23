@@ -3,7 +3,7 @@ let isEnabled = true;
 
 const updateButtonState = (state) => {
   if (window.location.pathname.startsWith('/live_chat')) return;
-  
+
   const btn = document.querySelector('.flow-chat-ytp-btn');
   const toggleSwitch = document.querySelector('#fc-toggle')?.closest('.flow-chat-switch');
 
@@ -150,7 +150,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
       window.parent.postMessage({ type: 'FLOW_CHAT_CONNECTED' }, '*');
     }
   };
-  
+
   setInterval(findAndObserveChat, 2000);
   findAndObserveChat();
 
@@ -164,7 +164,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
         scroller.scrollTop = scroller.scrollHeight;
       }
     }
-    
+
     // Sometimes YouTube shows a floating "More messages" button when chat pauses
     const showMoreBtn = document.querySelector('#show-more');
     if (showMoreBtn && showMoreBtn.style.display !== 'none' && !showMoreBtn.hasAttribute('hidden')) {
@@ -230,7 +230,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
     if (fcToggle) {
       fcToggle.checked = false;
     }
-    
+
     updateButtonState('none');
 
   });
@@ -286,7 +286,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
       // Convert zone coordinates from screen percentages to overlayContainer percentages
       const contWidth = 100 - mL - mR;
       const contHeight = 100 - mT - mB;
-      
+
       const cX = contWidth > 0 ? ((zX - mL) / contWidth) * 100 : 0;
       const cY = contHeight > 0 ? ((zY - mT) / contHeight) * 100 : 0;
       const cW = contWidth > 0 ? (zW / contWidth) * 100 : 0;
@@ -533,26 +533,32 @@ if (window.location.pathname.startsWith('/live_chat')) {
     let initialLeft = 0;
     let initialTop = 0;
 
+    // Prevent clicks from bubbling up and pausing the video
+    ['mousedown', 'mouseup', 'click'].forEach(eventType => {
+      panel.addEventListener(eventType, (e) => {
+        e.stopPropagation();
+      });
+    });
+
     panel.addEventListener('mousedown', (e) => {
-      const isInteractive = e.target.tagName === 'INPUT' || 
-                            e.target.tagName === 'LABEL' || 
-                            e.target.closest('.flow-chat-switch');
+      const isInteractive = e.target.tagName === 'INPUT' ||
+        e.target.tagName === 'LABEL' ||
+        e.target.closest('.flow-chat-switch');
       if (isInteractive) return;
       if (e.offsetX > panel.clientWidth) return; // Prevent drag on scrollbar
 
       isDragging = true;
       dragStartX = e.clientX;
       dragStartY = e.clientY;
-      
-      const rect = panel.getBoundingClientRect();
+
+      initialLeft = panel.offsetLeft;
+      initialTop = panel.offsetTop;
+
       panel.style.bottom = 'auto';
       panel.style.right = 'auto';
-      panel.style.left = rect.left + 'px';
-      panel.style.top = rect.top + 'px';
-      
-      initialLeft = rect.left;
-      initialTop = rect.top;
-      
+      panel.style.left = initialLeft + 'px';
+      panel.style.top = initialTop + 'px';
+
       panel.classList.add('fc-dragging');
       document.body.style.userSelect = 'none';
     });
@@ -571,7 +577,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
         panel.classList.remove('fc-dragging');
         document.body.style.userSelect = '';
       }
-    });
+    }, true); // Use capture to ensure we catch it before panel's stopPropagation
 
     const playerContainer = document.querySelector('.html5-video-player');
     if (playerContainer) {
@@ -581,7 +587,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
     // Toggle menu visibility
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      
+
       // If we are opening the panel, reset its dragged position to default
       if (!panel.classList.contains('active')) {
         panel.style.left = '';
@@ -589,7 +595,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
         panel.style.bottom = '';
         panel.style.right = '';
       }
-      
+
       panel.classList.toggle('active');
     });
 
@@ -800,7 +806,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
         if (filterList.length > 0) {
           const tempDiv = document.createElement('div');
           tempDiv.innerHTML = event.data.html;
-          
+
           const walk = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
           let node;
           while (node = walk.nextNode()) {
@@ -841,20 +847,20 @@ if (window.location.pathname.startsWith('/live_chat')) {
       if (!settings.antiOverlap && danmakuQueue.length > 0) danmakuQueue.length = 0;
       return;
     }
-    
+
     let itemsToProcess = Math.min(danmakuQueue.length, 5);
     let itemsKept = [];
-    
+
     for (let i = 0; i < itemsToProcess; i++) {
-        let item = danmakuQueue.shift();
-        if (Date.now() - item.time > 15000) continue; // Expire after 15s
-        
-        let spawned = attemptSpawn(item.html);
-        if (!spawned) itemsKept.push(item);
+      let item = danmakuQueue.shift();
+      if (Date.now() - item.time > 15000) continue; // Expire after 15s
+
+      let spawned = attemptSpawn(item.html);
+      if (!spawned) itemsKept.push(item);
     }
-    
+
     if (itemsKept.length > 0) {
-        danmakuQueue.unshift(...itemsKept);
+      danmakuQueue.unshift(...itemsKept);
     }
   }, 250);
 
@@ -909,8 +915,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
         let eHeight = parseFloat(existing.dataset.height) || existing.offsetHeight;
 
         // Vertical Overlap Check
-        // Add a small vertical padding (e.g. 10% of font size) to make it less crowded
-        const verticalPadding = settings.fontSize * 0.1;
+        const verticalPadding = 1;
         if (testTop < eTop + eHeight + verticalPadding && testTop + msgHeight + verticalPadding > eTop) {
           // Horizontal Overlap Check
           let eWidth = parseFloat(existing.dataset.width);
@@ -944,7 +949,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
     const maxAttempts = Math.floor(maxTop);
     for (let attempts = 0; attempts < maxAttempts; attempts++) {
       let testTop = Math.random() * maxTop;
-      
+
       if (!checkCollision(testTop)) {
         bestTop = testTop;
         foundSpot = true;
@@ -954,7 +959,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
     // 2. If random fails, search systematically using larger steps (lanes)
     if (!foundSpot) {
-      for (let testTop = 0; testTop <= maxTop; testTop += 2) {
+      for (let testTop = 0; testTop <= maxTop; testTop += 1) {
         if (!checkCollision(testTop)) {
           bestTop = testTop;
           foundSpot = true;
