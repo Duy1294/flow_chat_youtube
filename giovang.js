@@ -21,11 +21,8 @@ let settings = {
   zoneY: 0,
   zoneW: 20,
   zoneH: 20,
-  autoKeepUp: true,
-  keepUpSpeed: 1.15,
-  keepUpThreshold: 2.5,
-  targetLatency: 1.3,
-  autoJump: true
+  autoKeepUp: false,
+  keepUpSpeed: 1.1
 };
 
 let autoRateApplied = false;
@@ -266,7 +263,7 @@ const tickGiovangAutoKeepUp = () => {
       video.playbackRate = 1.0;
       autoRateApplied = false;
     }
-    updateGiovangKeepUpStatusUI('inactive', 'Auto Keep-Up off');
+    updateGiovangKeepUpStatusUI('inactive', 'Auto Keep-Up: Tắt');
     return;
   }
 
@@ -275,7 +272,7 @@ const tickGiovangAutoKeepUp = () => {
       video.playbackRate = 1.0;
       autoRateApplied = false;
     }
-    updateGiovangKeepUpStatusUI('inactive', 'Not a live stream');
+    updateGiovangKeepUpStatusUI('inactive', 'Không phải luồng Live');
     return;
   }
 
@@ -284,91 +281,38 @@ const tickGiovangAutoKeepUp = () => {
       video.playbackRate = 1.0;
       autoRateApplied = false;
     }
-    updateGiovangKeepUpStatusUI('inactive', 'Paused');
+    updateGiovangKeepUpStatusUI('inactive', 'Đang tạm dừng');
     return;
   }
 
   if (video.seeking || video.readyState < 3) {
-    updateGiovangKeepUpStatusUI('inactive', 'Buffering...');
+    updateGiovangKeepUpStatusUI('inactive', 'Đang tải đệm...');
     return;
   }
 
-  if (!video.seekable || video.seekable.length === 0) {
-    updateGiovangKeepUpStatusUI('inactive', 'Detecting stream...');
-    return;
-  }
-
-  const liveEdge = video.seekable.end(video.seekable.length - 1);
-  if (!isFinite(liveEdge) || liveEdge <= 0) return;
-
-  const latency = Math.max(0, liveEdge - video.currentTime);
-  const targetLatency = parseFloat(settings.targetLatency) || 1.3;
-  const threshold = parseFloat(settings.keepUpThreshold) || 2.5;
-  const catchUpSpeed = parseFloat(settings.keepUpSpeed) || 1.15;
-  const jumpThreshold = 15.0;
   const bufferAhead = getGiovangBufferAhead(video);
+  const catchUpSpeed = parseFloat(settings.keepUpSpeed) || 1.1;
 
   if (video.preservesPitch === false) {
     video.preservesPitch = true;
   }
 
-  if (latency > jumpThreshold) {
-    if (settings.autoJump !== false) {
-      syncGiovangLiveEdge();
-      updateGiovangKeepUpStatusUI('synced', `Synced live (${latency.toFixed(1)}s lag jumped)`);
-      return;
-    } else {
-      if (autoRateApplied) {
-        video.playbackRate = 1.0;
-        autoRateApplied = false;
-      }
-      updateGiovangKeepUpStatusUI('inactive', `Delayed (-${Math.round(latency)}s)`);
-      return;
-    }
-  }
+  // If buffer has enough content to safely catch up (> 2.0s), speed up gently.
+  // When buffer reaches live head (<= 1.2s), slow back down to 1.0x!
+  const shouldCatchUp = bufferAhead > 2.0;
 
-  if (latency > threshold) {
-    if (bufferAhead < 0.6) {
-      if (autoRateApplied) {
-        video.playbackRate = 1.0;
-        autoRateApplied = false;
-      }
-      updateGiovangKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (buffering)`);
-    } else {
-      if (video.playbackRate !== catchUpSpeed) {
-        video.playbackRate = catchUpSpeed;
-      }
-      autoRateApplied = true;
-      updateGiovangKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (${catchUpSpeed}x speed)`);
+  if (shouldCatchUp) {
+    if (video.playbackRate !== catchUpSpeed) {
+      video.playbackRate = catchUpSpeed;
     }
-    return;
-  }
-
-  if (latency <= targetLatency) {
-    if (autoRateApplied) {
-      video.playbackRate = 1.0;
-      autoRateApplied = false;
-    }
-    updateGiovangKeepUpStatusUI('synced', `Latency: ${latency.toFixed(1)}s (Synced ✓)`);
-    return;
-  }
-
-  if (autoRateApplied) {
-    if (bufferAhead < 0.6) {
-      video.playbackRate = 1.0;
-      autoRateApplied = false;
-      updateGiovangKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (buffering)`);
-    } else {
-      if (video.playbackRate !== catchUpSpeed) {
-        video.playbackRate = catchUpSpeed;
-      }
-      updateGiovangKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (${catchUpSpeed}x speed)`);
-    }
+    autoRateApplied = true;
+    updateGiovangKeepUpStatusUI('catching-up', `Đang tăng tốc nhẹ ${catchUpSpeed}x`);
   } else {
     if (video.playbackRate !== 1.0) {
       video.playbackRate = 1.0;
     }
-    updateGiovangKeepUpStatusUI('synced', `Latency: ${latency.toFixed(1)}s (Synced ✓)`);
+    autoRateApplied = false;
+    updateGiovangKeepUpStatusUI('synced', 'Đang đồng bộ Live (1.0x)');
   }
 };
 
@@ -436,30 +380,15 @@ const injectSettingsUI = (videoPlayer) => {
         <div class="flow-chat-setting-item fc-keepup-status-item">
           <div class="flow-chat-keepup-status">
             <span class="fc-status-dot" id="fc-keepup-dot"></span>
-            <span id="fc-keepup-status-text">Checking live status...</span>
+            <span id="fc-keepup-status-text">Đang kiểm tra...</span>
           </div>
-          <button type="button" class="flow-chat-sync-btn" id="fc-sync-now-btn" title="Jump to live edge now">⚡ Sync Live</button>
+          <button type="button" class="flow-chat-sync-btn" id="fc-sync-now-btn" title="Nhảy thủ công về mốc Live">⚡ Nhảy về Live</button>
         </div>
         <div class="flow-chat-setting-item">
           <div class="flow-chat-setting-header">
-            <span>Catch-Up Speed (<span id="fc-keepup-speed-val">${settings.keepUpSpeed || 1.15}</span>x)</span>
+            <span>Tốc độ tăng tốc (<span id="fc-keepup-speed-val">${settings.keepUpSpeed || 1.1}</span>x)</span>
           </div>
-          <input type="range" id="fc-keepup-speed" min="1.05" max="1.5" step="0.05" value="${settings.keepUpSpeed || 1.15}">
-        </div>
-        <div class="flow-chat-setting-item">
-          <div class="flow-chat-setting-header">
-            <span>Max Lag Tolerance (<span id="fc-keepup-threshold-val">${settings.keepUpThreshold || 2.5}</span>s)</span>
-          </div>
-          <input type="range" id="fc-keepup-threshold" min="1.5" max="10" step="0.5" value="${settings.keepUpThreshold || 2.5}">
-        </div>
-        <div class="flow-chat-setting-item">
-          <div class="flow-chat-setting-header">
-            <span>Auto Jump if > 15s lag</span>
-            <label class="flow-chat-switch">
-              <input type="checkbox" id="fc-keepup-jump-toggle" ${settings.autoJump !== false ? 'checked' : ''}>
-              <span class="flow-chat-slider"></span>
-            </label>
-          </div>
+          <input type="range" id="fc-keepup-speed" min="1.05" max="1.25" step="0.05" value="${settings.keepUpSpeed || 1.1}">
         </div>
       </div>
       <div class="flow-chat-setting-item">
@@ -614,18 +543,6 @@ const injectSettingsUI = (videoPlayer) => {
     document.getElementById('fc-keepup-speed-val').innerText = settings.keepUpSpeed;
     saveSettings();
     tickGiovangAutoKeepUp();
-  });
-
-  document.getElementById('fc-keepup-threshold')?.addEventListener('input', (e) => {
-    settings.keepUpThreshold = parseFloat(e.target.value);
-    document.getElementById('fc-keepup-threshold-val').innerText = settings.keepUpThreshold;
-    saveSettings();
-    tickGiovangAutoKeepUp();
-  });
-
-  document.getElementById('fc-keepup-jump-toggle')?.addEventListener('change', (e) => {
-    settings.autoJump = e.target.checked;
-    saveSettings();
   });
 
   document.getElementById('fc-zone-toggle').addEventListener('change', (e) => {

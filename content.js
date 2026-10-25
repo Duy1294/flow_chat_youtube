@@ -195,11 +195,8 @@ if (window.location.pathname.startsWith('/live_chat')) {
     zoneH: 20,
     filteredWords: "",
     antiOverlap: false,
-    autoKeepUp: true,
-    keepUpSpeed: 1.15,
-    keepUpThreshold: 2.5,
-    targetLatency: 1.3,
-    autoJump: true
+    autoKeepUp: false,
+    keepUpSpeed: 1.1
   };
 
   // Load settings from storage
@@ -421,122 +418,72 @@ if (window.location.pathname.startsWith('/live_chat')) {
   const tickAutoKeepUp = () => {
     const { video, isLive, liveBadge } = getLiveVideoElement();
 
+    // 1. If feature is disabled, revert any speed boost and exit
     if (!settings.autoKeepUp) {
       if (autoRateApplied && video) {
         video.playbackRate = 1.0;
         autoRateApplied = false;
       }
-      updateKeepUpStatusUI('inactive', 'Auto Keep-Up off');
+      updateKeepUpStatusUI('inactive', 'Auto Keep-Up: Tắt');
       return;
     }
 
+    // 2. If not a live stream, revert and exit
     if (!isLive || !video) {
       if (autoRateApplied && video) {
         video.playbackRate = 1.0;
         autoRateApplied = false;
       }
-      updateKeepUpStatusUI('inactive', 'Not a live stream');
+      updateKeepUpStatusUI('inactive', 'Không phải luồng Live');
       return;
     }
 
+    // 3. If paused, revert and exit
     if (video.paused) {
       if (autoRateApplied) {
         video.playbackRate = 1.0;
         autoRateApplied = false;
       }
-      updateKeepUpStatusUI('inactive', 'Paused');
+      updateKeepUpStatusUI('inactive', 'Đang tạm dừng');
       return;
     }
 
+    // 4. If seeking or currently buffering, don't change rate
     if (video.seeking || video.readyState < 3) {
-      updateKeepUpStatusUI('inactive', 'Buffering...');
+      updateKeepUpStatusUI('inactive', 'Đang tải đệm...');
       return;
     }
 
-    if (!video.seekable || video.seekable.length === 0) {
-      updateKeepUpStatusUI('inactive', 'Detecting live stream...');
-      return;
-    }
-
-    const liveEdge = video.seekable.end(video.seekable.length - 1);
-    if (!isFinite(liveEdge) || liveEdge <= 0) {
-      return;
-    }
-
-    const latency = Math.max(0, liveEdge - video.currentTime);
-    const targetLatency = parseFloat(settings.targetLatency) || 1.3;
-    const threshold = parseFloat(settings.keepUpThreshold) || 2.5;
-    const catchUpSpeed = parseFloat(settings.keepUpSpeed) || 1.15;
-    const jumpThreshold = 15.0;
     const bufferAhead = getBufferAhead(video);
+    const catchUpSpeed = parseFloat(settings.keepUpSpeed) || 1.1;
 
-    // Ensure audio pitch is preserved when speeding up
+    // Check if YouTube's native live badge indicates we fell behind
+    // On YouTube: button is clickable (not disabled) when behind live, and disabled when at live edge
+    const isYtBehind = liveBadge ? (!liveBadge.hasAttribute('disabled') && liveBadge.getAttribute('aria-disabled') !== 'true') : false;
+
+    // Ensure audio pitch is preserved so voices sound completely natural
     if (video.preservesPitch === false) {
       video.preservesPitch = true;
     }
 
-    // Case 1: Extreme lag (> 15s)
-    if (latency > jumpThreshold) {
-      if (settings.autoJump !== false) {
-        syncToLiveEdge();
-        updateKeepUpStatusUI('synced', `Synced live (${latency.toFixed(1)}s lag jumped)`);
-        return;
-      } else {
-        if (autoRateApplied) {
-          video.playbackRate = 1.0;
-          autoRateApplied = false;
-        }
-        updateKeepUpStatusUI('inactive', `DVR Replay (-${Math.round(latency)}s)`);
-        return;
-      }
-    }
+    // CONDITION TO SPEED UP:
+    // Only speed up when YouTube says we are behind live AND we have buffer downloaded (> 1.2s).
+    // Never speed up if bufferAhead < 1.0s, because that would drain the buffer and cause freezing!
+    const shouldCatchUp = isYtBehind && bufferAhead > 1.2;
 
-    // Case 2: Lag exceeds threshold (> 2.5s)
-    if (latency > threshold) {
-      // If buffer is dangerously low (< 0.6s), wait for buffer before speeding up to prevent stutter
-      if (bufferAhead < 0.6) {
-        if (autoRateApplied) {
-          video.playbackRate = 1.0;
-          autoRateApplied = false;
-        }
-        updateKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (buffering)`);
-      } else {
-        if (video.playbackRate !== catchUpSpeed) {
-          video.playbackRate = catchUpSpeed;
-        }
-        autoRateApplied = true;
-        updateKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (${catchUpSpeed}x speed)`);
+    if (shouldCatchUp) {
+      if (video.playbackRate !== catchUpSpeed) {
+        video.playbackRate = catchUpSpeed;
       }
-      return;
-    }
-
-    // Case 3: Fully caught up (<= 1.3s)
-    if (latency <= targetLatency) {
-      if (autoRateApplied) {
-        video.playbackRate = 1.0;
-        autoRateApplied = false;
-      }
-      updateKeepUpStatusUI('synced', `Latency: ${latency.toFixed(1)}s (Synced ✓)`);
-      return;
-    }
-
-    // Case 4: In hysteresis zone (targetLatency < latency <= threshold)
-    if (autoRateApplied) {
-      if (bufferAhead < 0.6) {
-        video.playbackRate = 1.0;
-        autoRateApplied = false;
-        updateKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (buffering)`);
-      } else {
-        if (video.playbackRate !== catchUpSpeed) {
-          video.playbackRate = catchUpSpeed;
-        }
-        updateKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (${catchUpSpeed}x speed)`);
-      }
+      autoRateApplied = true;
+      updateKeepUpStatusUI('catching-up', `Đang tăng tốc nhẹ ${catchUpSpeed}x`);
     } else {
+      // Caught up to live edge, or buffer is at safe minimal margin: return to normal 1.0x!
       if (video.playbackRate !== 1.0) {
         video.playbackRate = 1.0;
       }
-      updateKeepUpStatusUI('synced', `Latency: ${latency.toFixed(1)}s (Synced ✓)`);
+      autoRateApplied = false;
+      updateKeepUpStatusUI('synced', 'Đang đồng bộ Live (1.0x)');
     }
   };
 
@@ -645,30 +592,15 @@ if (window.location.pathname.startsWith('/live_chat')) {
         <div class="flow-chat-setting-item fc-keepup-status-item">
           <div class="flow-chat-keepup-status">
             <span class="fc-status-dot" id="fc-keepup-dot"></span>
-            <span id="fc-keepup-status-text">Checking live status...</span>
+            <span id="fc-keepup-status-text">Đang kiểm tra...</span>
           </div>
-          <button type="button" class="flow-chat-sync-btn" id="fc-sync-now-btn" title="Jump to live edge now">⚡ Sync Live</button>
+          <button type="button" class="flow-chat-sync-btn" id="fc-sync-now-btn" title="Nhảy thủ công về mốc Live">⚡ Nhảy về Live</button>
         </div>
         <div class="flow-chat-setting-item">
           <div class="flow-chat-setting-header">
-            <span>Catch-Up Speed (<span id="fc-keepup-speed-val">${settings.keepUpSpeed || 1.15}</span>x)</span>
+            <span>Tốc độ tăng tốc (<span id="fc-keepup-speed-val">${settings.keepUpSpeed || 1.1}</span>x)</span>
           </div>
-          <input type="range" id="fc-keepup-speed" min="1.05" max="1.5" step="0.05" value="${settings.keepUpSpeed || 1.15}">
-        </div>
-        <div class="flow-chat-setting-item">
-          <div class="flow-chat-setting-header">
-            <span>Max Lag Tolerance (<span id="fc-keepup-threshold-val">${settings.keepUpThreshold || 2.5}</span>s)</span>
-          </div>
-          <input type="range" id="fc-keepup-threshold" min="1.5" max="10" step="0.5" value="${settings.keepUpThreshold || 2.5}">
-        </div>
-        <div class="flow-chat-setting-item">
-          <div class="flow-chat-setting-header">
-            <span>Auto Jump if > 15s lag</span>
-            <label class="flow-chat-switch">
-              <input type="checkbox" id="fc-keepup-jump-toggle" ${settings.autoJump !== false ? 'checked' : ''}>
-              <span class="flow-chat-slider"></span>
-            </label>
-          </div>
+          <input type="range" id="fc-keepup-speed" min="1.05" max="1.25" step="0.05" value="${settings.keepUpSpeed || 1.1}">
         </div>
       </div>
       <div class="flow-chat-setting-item">
@@ -918,18 +850,6 @@ if (window.location.pathname.startsWith('/live_chat')) {
       document.getElementById('fc-keepup-speed-val').innerText = settings.keepUpSpeed;
       saveSettings();
       tickAutoKeepUp();
-    });
-
-    document.getElementById('fc-keepup-threshold')?.addEventListener('input', (e) => {
-      settings.keepUpThreshold = parseFloat(e.target.value);
-      document.getElementById('fc-keepup-threshold-val').innerText = settings.keepUpThreshold;
-      saveSettings();
-      tickAutoKeepUp();
-    });
-
-    document.getElementById('fc-keepup-jump-toggle')?.addEventListener('change', (e) => {
-      settings.autoJump = e.target.checked;
-      saveSettings();
     });
 
     ['zx', 'zy', 'zw', 'zh'].forEach(prop => {
