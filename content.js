@@ -457,19 +457,14 @@ if (window.location.pathname.startsWith('/live_chat')) {
     const bufferAhead = getBufferAhead(video);
     const catchUpSpeed = parseFloat(settings.keepUpSpeed) || 1.1;
 
-    // Check if YouTube's native live badge indicates we fell behind
-    // On YouTube: button is clickable (not disabled) when behind live, and disabled when at live edge
-    const isYtBehind = liveBadge ? (!liveBadge.hasAttribute('disabled') && liveBadge.getAttribute('aria-disabled') !== 'true') : false;
-
     // Ensure audio pitch is preserved so voices sound completely natural
     if (video.preservesPitch === false) {
       video.preservesPitch = true;
     }
 
-    // CONDITION TO SPEED UP:
-    // Only speed up when YouTube says we are behind live AND we have buffer downloaded (> 1.2s).
-    // Never speed up if bufferAhead < 1.0s, because that would drain the buffer and cause freezing!
-    const shouldCatchUp = isYtBehind && bufferAhead > 1.2;
+    // Trigger catch-up as soon as buffer accumulates (> 1.8s),
+    // and continue smoothly until buffer drops to the safe live margin (<= 1.2s).
+    const shouldCatchUp = autoRateApplied ? (bufferAhead > 1.2) : (bufferAhead > 1.8);
 
     if (shouldCatchUp) {
       if (video.playbackRate !== catchUpSpeed) {
@@ -478,7 +473,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
       autoRateApplied = true;
       updateKeepUpStatusUI('catching-up', `Catching up (${catchUpSpeed}x)`);
     } else {
-      // Caught up to live edge, or buffer is at safe minimal margin: return to normal 1.0x!
+      // Caught up to live edge, return to normal 1.0x
       if (video.playbackRate !== 1.0) {
         video.playbackRate = 1.0;
       }

@@ -297,9 +297,9 @@ const tickGiovangAutoKeepUp = () => {
     video.preservesPitch = true;
   }
 
-  // If buffer has enough content to safely catch up (> 2.0s), speed up gently.
-  // When buffer reaches live head (<= 1.2s), slow back down to 1.0x!
-  const shouldCatchUp = bufferAhead > 2.0;
+  // Trigger catch-up as soon as buffer accumulates (> 1.8s),
+  // and continue smoothly until buffer drops to the safe live margin (<= 1.2s).
+  const shouldCatchUp = autoRateApplied ? (bufferAhead > 1.2) : (bufferAhead > 1.8);
 
   if (shouldCatchUp) {
     if (video.playbackRate !== catchUpSpeed) {
