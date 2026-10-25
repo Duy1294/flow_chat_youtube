@@ -263,7 +263,7 @@ const tickGiovangAutoKeepUp = () => {
       video.playbackRate = 1.0;
       autoRateApplied = false;
     }
-    updateGiovangKeepUpStatusUI('inactive', 'Auto Keep-Up: Tắt');
+    updateGiovangKeepUpStatusUI('inactive', 'Auto Keep-Up: Off');
     return;
   }
 
@@ -272,7 +272,7 @@ const tickGiovangAutoKeepUp = () => {
       video.playbackRate = 1.0;
       autoRateApplied = false;
     }
-    updateGiovangKeepUpStatusUI('inactive', 'Không phải luồng Live');
+    updateGiovangKeepUpStatusUI('inactive', 'Not a live stream');
     return;
   }
 
@@ -281,12 +281,12 @@ const tickGiovangAutoKeepUp = () => {
       video.playbackRate = 1.0;
       autoRateApplied = false;
     }
-    updateGiovangKeepUpStatusUI('inactive', 'Đang tạm dừng');
+    updateGiovangKeepUpStatusUI('inactive', 'Paused');
     return;
   }
 
   if (video.seeking || video.readyState < 3) {
-    updateGiovangKeepUpStatusUI('inactive', 'Đang tải đệm...');
+    updateGiovangKeepUpStatusUI('inactive', 'Buffering...');
     return;
   }
 
@@ -306,13 +306,13 @@ const tickGiovangAutoKeepUp = () => {
       video.playbackRate = catchUpSpeed;
     }
     autoRateApplied = true;
-    updateGiovangKeepUpStatusUI('catching-up', `Đang tăng tốc nhẹ ${catchUpSpeed}x`);
+    updateGiovangKeepUpStatusUI('catching-up', `Catching up (${catchUpSpeed}x)`);
   } else {
     if (video.playbackRate !== 1.0) {
       video.playbackRate = 1.0;
     }
     autoRateApplied = false;
-    updateGiovangKeepUpStatusUI('synced', 'Đang đồng bộ Live (1.0x)');
+    updateGiovangKeepUpStatusUI('synced', 'Synced (1.0x)');
   }
 };
 
@@ -380,13 +380,13 @@ const injectSettingsUI = (videoPlayer) => {
         <div class="flow-chat-setting-item fc-keepup-status-item">
           <div class="flow-chat-keepup-status">
             <span class="fc-status-dot" id="fc-keepup-dot"></span>
-            <span id="fc-keepup-status-text">Đang kiểm tra...</span>
+            <span id="fc-keepup-status-text">Checking status...</span>
           </div>
-          <button type="button" class="flow-chat-sync-btn" id="fc-sync-now-btn" title="Nhảy thủ công về mốc Live">⚡ Nhảy về Live</button>
+          <button type="button" class="flow-chat-sync-btn" id="fc-sync-now-btn" title="Jump to live edge">Sync Live</button>
         </div>
         <div class="flow-chat-setting-item">
           <div class="flow-chat-setting-header">
-            <span>Tốc độ tăng tốc (<span id="fc-keepup-speed-val">${settings.keepUpSpeed || 1.1}</span>x)</span>
+            <span>Catch-Up Speed (<span id="fc-keepup-speed-val">${settings.keepUpSpeed || 1.1}</span>x)</span>
           </div>
           <input type="range" id="fc-keepup-speed" min="1.05" max="1.25" step="0.05" value="${settings.keepUpSpeed || 1.1}">
         </div>
