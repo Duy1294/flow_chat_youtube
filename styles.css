@@ -292,3 +292,78 @@ input:checked+.flow-chat-slider:before {
   fill: #4ade80 !important;
   transition: fill 0.3s ease;
 }
+
+/* Flow Chat Auto Keep-Up (Low Latency) */
+.fc-keepup-status-item {
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 8px 16px !important;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  margin: 6px 12px !important;
+}
+
+.flow-chat-keepup-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #ddd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fc-status-dot {
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  border-radius: 50%;
+  background-color: #717171;
+  transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+.fc-status-dot.synced {
+  background-color: #48bb78;
+  box-shadow: 0 0 6px #48bb78;
+}
+
+.fc-status-dot.catching-up {
+  background-color: #ed8936;
+  box-shadow: 0 0 6px #ed8936;
+  animation: fc-pulse 1.5s infinite;
+}
+
+.fc-status-dot.inactive {
+  background-color: #717171;
+}
+
+@keyframes fc-pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.25); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.flow-chat-sync-btn {
+  background: rgba(62, 166, 255, 0.2);
+  border: 1px solid rgba(62, 166, 255, 0.5);
+  color: #3ea6ff;
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.flow-chat-sync-btn:hover {
+  background: rgba(62, 166, 255, 0.4);
+  border-color: #3ea6ff;
+  color: #fff;
+}
+
+.flow-chat-sync-btn:active {
+  transform: scale(0.95);
+}

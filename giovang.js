@@ -20,8 +20,15 @@ let settings = {
   zoneX: 0,
   zoneY: 0,
   zoneW: 20,
-  zoneH: 20
+  zoneH: 20,
+  autoKeepUp: true,
+  keepUpSpeed: 1.15,
+  keepUpThreshold: 2.5,
+  targetLatency: 1.3,
+  autoJump: true
 };
+
+let autoRateApplied = false;
 
 // Load settings from storage
 chrome.storage.local.get(['flowChatSettings'], (result) => {
@@ -198,11 +205,174 @@ const setupOverlay = () => {
     overlayContainer = document.getElementById('flow-chat-overlay');
     updateOverlayMargins();
   }
-  
   if (videoPlayer) {
     injectSettingsUI(videoPlayer);
   }
 };
+
+// --- AUTO KEEP-UP (LOW LATENCY) ENGINE ---
+const getGiovangLiveVideo = () => {
+  const video = document.querySelector('.dplayer-video-wrap video') || document.querySelector('.dplayer video') || document.querySelector('.box-livestream-video video') || document.querySelector('video');
+  const isLive = !!document.querySelector('.box-livestream-video, .dplayer-live') || (video && video.duration === Infinity);
+  return { video, isLive };
+};
+
+const getGiovangBufferAhead = (video) => {
+  if (!video || !video.buffered || video.buffered.length === 0) return 0;
+  const current = video.currentTime;
+  for (let i = 0; i < video.buffered.length; i++) {
+    if (video.buffered.start(i) <= current && current <= video.buffered.end(i)) {
+      return video.buffered.end(i) - current;
+    }
+  }
+  return 0;
+};
+
+const syncGiovangLiveEdge = () => {
+  const { video, isLive } = getGiovangLiveVideo();
+  if (!isLive || !video || !video.seekable || video.seekable.length === 0) return false;
+  const liveEdge = video.seekable.end(video.seekable.length - 1);
+  const targetLatency = parseFloat(settings.targetLatency) || 1.3;
+  video.currentTime = Math.max(0, liveEdge - targetLatency);
+  if (autoRateApplied) {
+    video.playbackRate = 1.0;
+    autoRateApplied = false;
+  }
+  return true;
+};
+
+const updateGiovangKeepUpStatusUI = (status, text) => {
+  const dot = document.getElementById('fc-keepup-dot');
+  const textEl = document.getElementById('fc-keepup-status-text');
+  if (!dot || !textEl) return;
+
+  dot.className = 'fc-status-dot';
+  if (status === 'synced') {
+    dot.classList.add('synced');
+  } else if (status === 'catching-up') {
+    dot.classList.add('catching-up');
+  } else {
+    dot.classList.add('inactive');
+  }
+
+  textEl.textContent = text;
+};
+
+const tickGiovangAutoKeepUp = () => {
+  const { video, isLive } = getGiovangLiveVideo();
+
+  if (!settings.autoKeepUp) {
+    if (autoRateApplied && video) {
+      video.playbackRate = 1.0;
+      autoRateApplied = false;
+    }
+    updateGiovangKeepUpStatusUI('inactive', 'Auto Keep-Up off');
+    return;
+  }
+
+  if (!isLive || !video) {
+    if (autoRateApplied && video) {
+      video.playbackRate = 1.0;
+      autoRateApplied = false;
+    }
+    updateGiovangKeepUpStatusUI('inactive', 'Not a live stream');
+    return;
+  }
+
+  if (video.paused) {
+    if (autoRateApplied) {
+      video.playbackRate = 1.0;
+      autoRateApplied = false;
+    }
+    updateGiovangKeepUpStatusUI('inactive', 'Paused');
+    return;
+  }
+
+  if (video.seeking || video.readyState < 3) {
+    updateGiovangKeepUpStatusUI('inactive', 'Buffering...');
+    return;
+  }
+
+  if (!video.seekable || video.seekable.length === 0) {
+    updateGiovangKeepUpStatusUI('inactive', 'Detecting stream...');
+    return;
+  }
+
+  const liveEdge = video.seekable.end(video.seekable.length - 1);
+  if (!isFinite(liveEdge) || liveEdge <= 0) return;
+
+  const latency = Math.max(0, liveEdge - video.currentTime);
+  const targetLatency = parseFloat(settings.targetLatency) || 1.3;
+  const threshold = parseFloat(settings.keepUpThreshold) || 2.5;
+  const catchUpSpeed = parseFloat(settings.keepUpSpeed) || 1.15;
+  const jumpThreshold = 15.0;
+  const bufferAhead = getGiovangBufferAhead(video);
+
+  if (video.preservesPitch === false) {
+    video.preservesPitch = true;
+  }
+
+  if (latency > jumpThreshold) {
+    if (settings.autoJump !== false) {
+      syncGiovangLiveEdge();
+      updateGiovangKeepUpStatusUI('synced', `Synced live (${latency.toFixed(1)}s lag jumped)`);
+      return;
+    } else {
+      if (autoRateApplied) {
+        video.playbackRate = 1.0;
+        autoRateApplied = false;
+      }
+      updateGiovangKeepUpStatusUI('inactive', `Delayed (-${Math.round(latency)}s)`);
+      return;
+    }
+  }
+
+  if (latency > threshold) {
+    if (bufferAhead < 0.6) {
+      if (autoRateApplied) {
+        video.playbackRate = 1.0;
+        autoRateApplied = false;
+      }
+      updateGiovangKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (buffering)`);
+    } else {
+      if (video.playbackRate !== catchUpSpeed) {
+        video.playbackRate = catchUpSpeed;
+      }
+      autoRateApplied = true;
+      updateGiovangKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (${catchUpSpeed}x speed)`);
+    }
+    return;
+  }
+
+  if (latency <= targetLatency) {
+    if (autoRateApplied) {
+      video.playbackRate = 1.0;
+      autoRateApplied = false;
+    }
+    updateGiovangKeepUpStatusUI('synced', `Latency: ${latency.toFixed(1)}s (Synced ✓)`);
+    return;
+  }
+
+  if (autoRateApplied) {
+    if (bufferAhead < 0.6) {
+      video.playbackRate = 1.0;
+      autoRateApplied = false;
+      updateGiovangKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (buffering)`);
+    } else {
+      if (video.playbackRate !== catchUpSpeed) {
+        video.playbackRate = catchUpSpeed;
+      }
+      updateGiovangKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (${catchUpSpeed}x speed)`);
+    }
+  } else {
+    if (video.playbackRate !== 1.0) {
+      video.playbackRate = 1.0;
+    }
+    updateGiovangKeepUpStatusUI('synced', `Latency: ${latency.toFixed(1)}s (Synced ✓)`);
+  }
+};
+
+setInterval(tickGiovangAutoKeepUp, 800);
 
 const injectSettingsUI = (videoPlayer) => {
   if (document.querySelector('.flow-chat-gv-ui')) return;
@@ -251,6 +421,45 @@ const injectSettingsUI = (videoPlayer) => {
             <input type="checkbox" id="fc-toggle" ${settings.enabled ? 'checked' : ''}>
             <span class="flow-chat-slider"></span>
           </label>
+        </div>
+      </div>
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Auto Keep-Up (Live)</span>
+          <label class="flow-chat-switch">
+            <input type="checkbox" id="fc-keepup-toggle" ${settings.autoKeepUp ? 'checked' : ''}>
+            <span class="flow-chat-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div id="fc-keepup-settings" style="display: ${settings.autoKeepUp ? 'block' : 'none'}">
+        <div class="flow-chat-setting-item fc-keepup-status-item">
+          <div class="flow-chat-keepup-status">
+            <span class="fc-status-dot" id="fc-keepup-dot"></span>
+            <span id="fc-keepup-status-text">Checking live status...</span>
+          </div>
+          <button type="button" class="flow-chat-sync-btn" id="fc-sync-now-btn" title="Jump to live edge now">⚡ Sync Live</button>
+        </div>
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Catch-Up Speed (<span id="fc-keepup-speed-val">${settings.keepUpSpeed || 1.15}</span>x)</span>
+          </div>
+          <input type="range" id="fc-keepup-speed" min="1.05" max="1.5" step="0.05" value="${settings.keepUpSpeed || 1.15}">
+        </div>
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Max Lag Tolerance (<span id="fc-keepup-threshold-val">${settings.keepUpThreshold || 2.5}</span>s)</span>
+          </div>
+          <input type="range" id="fc-keepup-threshold" min="1.5" max="10" step="0.5" value="${settings.keepUpThreshold || 2.5}">
+        </div>
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Auto Jump if > 15s lag</span>
+            <label class="flow-chat-switch">
+              <input type="checkbox" id="fc-keepup-jump-toggle" ${settings.autoJump !== false ? 'checked' : ''}>
+              <span class="flow-chat-slider"></span>
+            </label>
+          </div>
         </div>
       </div>
       <div class="flow-chat-setting-item">
@@ -383,6 +592,40 @@ const injectSettingsUI = (videoPlayer) => {
       chatObserver.disconnect();
       chatObserver = null;
     }
+  });
+
+  document.getElementById('fc-keepup-toggle').addEventListener('change', (e) => {
+    settings.autoKeepUp = e.target.checked;
+    saveSettings();
+    const keepUpSettingsDiv = document.getElementById('fc-keepup-settings');
+    if (keepUpSettingsDiv) {
+      keepUpSettingsDiv.style.display = settings.autoKeepUp ? 'block' : 'none';
+    }
+    tickGiovangAutoKeepUp();
+  });
+
+  document.getElementById('fc-sync-now-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    syncGiovangLiveEdge();
+  });
+
+  document.getElementById('fc-keepup-speed')?.addEventListener('input', (e) => {
+    settings.keepUpSpeed = parseFloat(e.target.value);
+    document.getElementById('fc-keepup-speed-val').innerText = settings.keepUpSpeed;
+    saveSettings();
+    tickGiovangAutoKeepUp();
+  });
+
+  document.getElementById('fc-keepup-threshold')?.addEventListener('input', (e) => {
+    settings.keepUpThreshold = parseFloat(e.target.value);
+    document.getElementById('fc-keepup-threshold-val').innerText = settings.keepUpThreshold;
+    saveSettings();
+    tickGiovangAutoKeepUp();
+  });
+
+  document.getElementById('fc-keepup-jump-toggle')?.addEventListener('change', (e) => {
+    settings.autoJump = e.target.checked;
+    saveSettings();
   });
 
   document.getElementById('fc-zone-toggle').addEventListener('change', (e) => {

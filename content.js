@@ -175,6 +175,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
   // --- MAIN PAGE LOGIC (Video Player) ---
   console.log("Flow Chat: Initializing on main page");
   let overlayContainer = null;
+  let autoRateApplied = false;
 
   let settings = {
     enabled: false,
@@ -193,7 +194,12 @@ if (window.location.pathname.startsWith('/live_chat')) {
     zoneW: 20,
     zoneH: 20,
     filteredWords: "",
-    antiOverlap: false
+    antiOverlap: false,
+    autoKeepUp: true,
+    keepUpSpeed: 1.15,
+    keepUpThreshold: 2.5,
+    targetLatency: 1.3,
+    autoJump: true
   };
 
   // Load settings from storage
@@ -213,6 +219,13 @@ if (window.location.pathname.startsWith('/live_chat')) {
     // Always start disabled on a new video
     settings.enabled = false;
     isEnabled = false;
+
+    // Reset auto keep-up rate on navigation
+    if (autoRateApplied) {
+      const video = document.querySelector('video.html5-main-video') || document.querySelector('video');
+      if (video) video.playbackRate = 1.0;
+      autoRateApplied = false;
+    }
 
     // Destroy hidden iframe on navigation
     const hiddenIframe = document.getElementById('flow-chat-hidden-iframe');
@@ -337,6 +350,199 @@ if (window.location.pathname.startsWith('/live_chat')) {
     injectSettingsUI();
   };
 
+  // --- AUTO KEEP-UP (LOW LATENCY) ENGINE ---
+  const getLiveVideoElement = () => {
+    const player = document.querySelector('.html5-video-player');
+    const video = player?.querySelector('video') || document.querySelector('video.html5-main-video') || document.querySelector('video');
+    const isYtLive = player?.classList.contains('ytp-live') || false;
+    const liveBadge = document.querySelector('.ytp-live-badge');
+    const isLive = isYtLive || !!liveBadge || (video && video.duration === Infinity);
+
+    return { player, video, isLive, liveBadge };
+  };
+
+  const getBufferAhead = (video) => {
+    if (!video || !video.buffered || video.buffered.length === 0) return 0;
+    const current = video.currentTime;
+    for (let i = 0; i < video.buffered.length; i++) {
+      if (video.buffered.start(i) <= current && current <= video.buffered.end(i)) {
+        return video.buffered.end(i) - current;
+      }
+    }
+    return 0;
+  };
+
+  const syncToLiveEdge = () => {
+    const { video, isLive, liveBadge } = getLiveVideoElement();
+    if (!isLive || !video) return false;
+
+    // 1. Try native YouTube live badge button click
+    if (liveBadge && !liveBadge.disabled && liveBadge.getAttribute('aria-disabled') !== 'true') {
+      liveBadge.click();
+      if (autoRateApplied) {
+        video.playbackRate = 1.0;
+        autoRateApplied = false;
+      }
+      return true;
+    }
+
+    // 2. Fallback to seekable live edge
+    if (video.seekable && video.seekable.length > 0) {
+      const liveEdge = video.seekable.end(video.seekable.length - 1);
+      const targetLatency = parseFloat(settings.targetLatency) || 1.3;
+      video.currentTime = Math.max(0, liveEdge - targetLatency);
+      if (autoRateApplied) {
+        video.playbackRate = 1.0;
+        autoRateApplied = false;
+      }
+      return true;
+    }
+
+    return false;
+  };
+
+  const updateKeepUpStatusUI = (status, text) => {
+    const dot = document.getElementById('fc-keepup-dot');
+    const textEl = document.getElementById('fc-keepup-status-text');
+    if (!dot || !textEl) return;
+
+    dot.className = 'fc-status-dot';
+    if (status === 'synced') {
+      dot.classList.add('synced');
+    } else if (status === 'catching-up') {
+      dot.classList.add('catching-up');
+    } else {
+      dot.classList.add('inactive');
+    }
+
+    textEl.textContent = text;
+  };
+
+  const tickAutoKeepUp = () => {
+    const { video, isLive, liveBadge } = getLiveVideoElement();
+
+    if (!settings.autoKeepUp) {
+      if (autoRateApplied && video) {
+        video.playbackRate = 1.0;
+        autoRateApplied = false;
+      }
+      updateKeepUpStatusUI('inactive', 'Auto Keep-Up off');
+      return;
+    }
+
+    if (!isLive || !video) {
+      if (autoRateApplied && video) {
+        video.playbackRate = 1.0;
+        autoRateApplied = false;
+      }
+      updateKeepUpStatusUI('inactive', 'Not a live stream');
+      return;
+    }
+
+    if (video.paused) {
+      if (autoRateApplied) {
+        video.playbackRate = 1.0;
+        autoRateApplied = false;
+      }
+      updateKeepUpStatusUI('inactive', 'Paused');
+      return;
+    }
+
+    if (video.seeking || video.readyState < 3) {
+      updateKeepUpStatusUI('inactive', 'Buffering...');
+      return;
+    }
+
+    if (!video.seekable || video.seekable.length === 0) {
+      updateKeepUpStatusUI('inactive', 'Detecting live stream...');
+      return;
+    }
+
+    const liveEdge = video.seekable.end(video.seekable.length - 1);
+    if (!isFinite(liveEdge) || liveEdge <= 0) {
+      return;
+    }
+
+    const latency = Math.max(0, liveEdge - video.currentTime);
+    const targetLatency = parseFloat(settings.targetLatency) || 1.3;
+    const threshold = parseFloat(settings.keepUpThreshold) || 2.5;
+    const catchUpSpeed = parseFloat(settings.keepUpSpeed) || 1.15;
+    const jumpThreshold = 15.0;
+    const bufferAhead = getBufferAhead(video);
+
+    // Ensure audio pitch is preserved when speeding up
+    if (video.preservesPitch === false) {
+      video.preservesPitch = true;
+    }
+
+    // Case 1: Extreme lag (> 15s)
+    if (latency > jumpThreshold) {
+      if (settings.autoJump !== false) {
+        syncToLiveEdge();
+        updateKeepUpStatusUI('synced', `Synced live (${latency.toFixed(1)}s lag jumped)`);
+        return;
+      } else {
+        if (autoRateApplied) {
+          video.playbackRate = 1.0;
+          autoRateApplied = false;
+        }
+        updateKeepUpStatusUI('inactive', `DVR Replay (-${Math.round(latency)}s)`);
+        return;
+      }
+    }
+
+    // Case 2: Lag exceeds threshold (> 2.5s)
+    if (latency > threshold) {
+      // If buffer is dangerously low (< 0.6s), wait for buffer before speeding up to prevent stutter
+      if (bufferAhead < 0.6) {
+        if (autoRateApplied) {
+          video.playbackRate = 1.0;
+          autoRateApplied = false;
+        }
+        updateKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (buffering)`);
+      } else {
+        if (video.playbackRate !== catchUpSpeed) {
+          video.playbackRate = catchUpSpeed;
+        }
+        autoRateApplied = true;
+        updateKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (${catchUpSpeed}x speed)`);
+      }
+      return;
+    }
+
+    // Case 3: Fully caught up (<= 1.3s)
+    if (latency <= targetLatency) {
+      if (autoRateApplied) {
+        video.playbackRate = 1.0;
+        autoRateApplied = false;
+      }
+      updateKeepUpStatusUI('synced', `Latency: ${latency.toFixed(1)}s (Synced ✓)`);
+      return;
+    }
+
+    // Case 4: In hysteresis zone (targetLatency < latency <= threshold)
+    if (autoRateApplied) {
+      if (bufferAhead < 0.6) {
+        video.playbackRate = 1.0;
+        autoRateApplied = false;
+        updateKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (buffering)`);
+      } else {
+        if (video.playbackRate !== catchUpSpeed) {
+          video.playbackRate = catchUpSpeed;
+        }
+        updateKeepUpStatusUI('catching-up', `Latency: ${latency.toFixed(1)}s (${catchUpSpeed}x speed)`);
+      }
+    } else {
+      if (video.playbackRate !== 1.0) {
+        video.playbackRate = 1.0;
+      }
+      updateKeepUpStatusUI('synced', `Latency: ${latency.toFixed(1)}s (Synced ✓)`);
+    }
+  };
+
+  // Start background ticker for auto keep-up (every 800ms)
+  let autoKeepUpInterval = setInterval(tickAutoKeepUp, 800);
+
   const injectSettingsUI = () => {
     if (document.querySelector('.flow-chat-ytp-btn')) return;
 
@@ -424,6 +630,45 @@ if (window.location.pathname.startsWith('/live_chat')) {
             <input type="checkbox" id="fc-overlap-toggle" ${settings.antiOverlap ? 'checked' : ''}>
             <span class="flow-chat-slider"></span>
           </label>
+        </div>
+      </div>
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Auto Keep-Up (Live)</span>
+          <label class="flow-chat-switch">
+            <input type="checkbox" id="fc-keepup-toggle" ${settings.autoKeepUp ? 'checked' : ''}>
+            <span class="flow-chat-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div id="fc-keepup-settings" style="display: ${settings.autoKeepUp ? 'block' : 'none'}">
+        <div class="flow-chat-setting-item fc-keepup-status-item">
+          <div class="flow-chat-keepup-status">
+            <span class="fc-status-dot" id="fc-keepup-dot"></span>
+            <span id="fc-keepup-status-text">Checking live status...</span>
+          </div>
+          <button type="button" class="flow-chat-sync-btn" id="fc-sync-now-btn" title="Jump to live edge now">⚡ Sync Live</button>
+        </div>
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Catch-Up Speed (<span id="fc-keepup-speed-val">${settings.keepUpSpeed || 1.15}</span>x)</span>
+          </div>
+          <input type="range" id="fc-keepup-speed" min="1.05" max="1.5" step="0.05" value="${settings.keepUpSpeed || 1.15}">
+        </div>
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Max Lag Tolerance (<span id="fc-keepup-threshold-val">${settings.keepUpThreshold || 2.5}</span>s)</span>
+          </div>
+          <input type="range" id="fc-keepup-threshold" min="1.5" max="10" step="0.5" value="${settings.keepUpThreshold || 2.5}">
+        </div>
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Auto Jump if > 15s lag</span>
+            <label class="flow-chat-switch">
+              <input type="checkbox" id="fc-keepup-jump-toggle" ${settings.autoJump !== false ? 'checked' : ''}>
+              <span class="flow-chat-slider"></span>
+            </label>
+          </div>
         </div>
       </div>
       <div class="flow-chat-setting-item">
@@ -651,6 +896,40 @@ if (window.location.pathname.startsWith('/live_chat')) {
       if (!settings.antiOverlap) {
         danmakuQueue.length = 0; // Clear queue if disabled
       }
+    });
+
+    document.getElementById('fc-keepup-toggle').addEventListener('change', (e) => {
+      settings.autoKeepUp = e.target.checked;
+      saveSettings();
+      const keepUpSettingsDiv = document.getElementById('fc-keepup-settings');
+      if (keepUpSettingsDiv) {
+        keepUpSettingsDiv.style.display = settings.autoKeepUp ? 'block' : 'none';
+      }
+      tickAutoKeepUp();
+    });
+
+    document.getElementById('fc-sync-now-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      syncToLiveEdge();
+    });
+
+    document.getElementById('fc-keepup-speed')?.addEventListener('input', (e) => {
+      settings.keepUpSpeed = parseFloat(e.target.value);
+      document.getElementById('fc-keepup-speed-val').innerText = settings.keepUpSpeed;
+      saveSettings();
+      tickAutoKeepUp();
+    });
+
+    document.getElementById('fc-keepup-threshold')?.addEventListener('input', (e) => {
+      settings.keepUpThreshold = parseFloat(e.target.value);
+      document.getElementById('fc-keepup-threshold-val').innerText = settings.keepUpThreshold;
+      saveSettings();
+      tickAutoKeepUp();
+    });
+
+    document.getElementById('fc-keepup-jump-toggle')?.addEventListener('change', (e) => {
+      settings.autoJump = e.target.checked;
+      saveSettings();
     });
 
     ['zx', 'zy', 'zw', 'zh'].forEach(prop => {
@@ -1004,8 +1283,12 @@ if (window.location.pathname.startsWith('/live_chat')) {
     return true;
   };
 
-  // Handle visibility change so danmaku pauses when the user switches tabs.
+  // Handle visibility change so danmaku pauses when the user switches tabs,
+  // and trigger auto keep-up immediately when returning to the tab.
   document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      tickAutoKeepUp();
+    }
     if (overlayContainer) {
       const messages = overlayContainer.querySelectorAll('.flow-chat-message');
       messages.forEach(msg => {
