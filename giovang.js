@@ -22,7 +22,10 @@ let settings = {
   zoneW: 20,
   zoneH: 20,
   autoKeepUp: false,
-  keepUpSpeed: 1.1
+  keepUpSpeed: 1.1,
+  keepUpTrigger: 1.8,
+  keepUpTarget: 1.2,
+  showBufferBadge: true
 };
 
 let autoRateApplied = false;
@@ -238,21 +241,46 @@ const syncGiovangLiveEdge = () => {
   return true;
 };
 
-const updateGiovangKeepUpStatusUI = (status, text) => {
-  const dot = document.getElementById('fc-keepup-dot');
-  const textEl = document.getElementById('fc-keepup-status-text');
-  if (!dot || !textEl) return;
-
-  dot.className = 'fc-status-dot';
-  if (status === 'synced') {
-    dot.classList.add('synced');
-  } else if (status === 'catching-up') {
-    dot.classList.add('catching-up');
-  } else {
-    dot.classList.add('inactive');
+const updateGiovangKeepUpStatusUI = (status, text, bufferAhead = 0) => {
+  const keepUpBtn = document.querySelector('.flow-chat-gv-keepup-btn');
+  if (keepUpBtn) {
+    keepUpBtn.setAttribute('title', `Auto Keep-Up: ${text}${bufferAhead > 0 ? ` (${bufferAhead.toFixed(1)}s)` : ''}`);
+    const path = keepUpBtn.querySelector('.fc-gv-keepup-path');
+    if (path) {
+      if (status === 'synced') {
+        path.style.fill = '#4ade80';
+      } else if (status === 'catching-up') {
+        path.style.fill = '#fb923c';
+      } else {
+        path.style.fill = '#fff';
+      }
+    }
   }
 
-  textEl.textContent = text;
+  const dot = document.getElementById('fc-keepup-dot');
+  const textEl = document.getElementById('fc-keepup-status-text');
+  if (dot) {
+    dot.className = 'fc-status-dot';
+    if (status === 'synced') {
+      dot.classList.add('synced');
+    } else if (status === 'catching-up') {
+      dot.classList.add('catching-up');
+    } else {
+      dot.classList.add('inactive');
+    }
+  }
+
+  if (textEl) textEl.textContent = text;
+
+  // Update Buffer Bar Meter in popup
+  const bufferNum = document.getElementById('fc-buffer-num');
+  const bufferBar = document.getElementById('fc-buffer-bar');
+  if (bufferNum) bufferNum.textContent = `${bufferAhead.toFixed(2)}s`;
+  if (bufferBar) {
+    const pct = Math.min(100, Math.max(0, (bufferAhead / 4.0) * 100));
+    bufferBar.style.width = `${pct}%`;
+    bufferBar.className = `fc-buffer-bar ${status}`;
+  }
 };
 
 const tickGiovangAutoKeepUp = () => {
@@ -263,7 +291,7 @@ const tickGiovangAutoKeepUp = () => {
       video.playbackRate = 1.0;
       autoRateApplied = false;
     }
-    updateGiovangKeepUpStatusUI('inactive', 'Auto Keep-Up: Off');
+    updateGiovangKeepUpStatusUI('inactive', 'Auto Keep-Up: Off', 0);
     return;
   }
 
@@ -272,7 +300,7 @@ const tickGiovangAutoKeepUp = () => {
       video.playbackRate = 1.0;
       autoRateApplied = false;
     }
-    updateGiovangKeepUpStatusUI('inactive', 'Not a live stream');
+    updateGiovangKeepUpStatusUI('inactive', 'Not a live stream', 0);
     return;
   }
 
@@ -281,38 +309,38 @@ const tickGiovangAutoKeepUp = () => {
       video.playbackRate = 1.0;
       autoRateApplied = false;
     }
-    updateGiovangKeepUpStatusUI('inactive', 'Paused');
+    updateGiovangKeepUpStatusUI('inactive', 'Paused', 0);
     return;
   }
 
   if (video.seeking || video.readyState < 3) {
-    updateGiovangKeepUpStatusUI('inactive', 'Buffering...');
+    updateGiovangKeepUpStatusUI('inactive', 'Buffering...', 0);
     return;
   }
 
   const bufferAhead = getGiovangBufferAhead(video);
   const catchUpSpeed = parseFloat(settings.keepUpSpeed) || 1.1;
+  const trigger = parseFloat(settings.keepUpTrigger) || 1.8;
+  const target = parseFloat(settings.keepUpTarget) || 1.2;
 
   if (video.preservesPitch === false) {
     video.preservesPitch = true;
   }
 
-  // Trigger catch-up as soon as buffer accumulates (> 1.8s),
-  // and continue smoothly until buffer drops to the safe live margin (<= 1.2s).
-  const shouldCatchUp = autoRateApplied ? (bufferAhead > 1.2) : (bufferAhead > 1.8);
+  const shouldCatchUp = autoRateApplied ? (bufferAhead > target) : (bufferAhead > trigger);
 
   if (shouldCatchUp) {
     if (video.playbackRate !== catchUpSpeed) {
       video.playbackRate = catchUpSpeed;
     }
     autoRateApplied = true;
-    updateGiovangKeepUpStatusUI('catching-up', `Catching up (${catchUpSpeed}x)`);
+    updateGiovangKeepUpStatusUI('catching-up', `Catching up (${catchUpSpeed}x)`, bufferAhead);
   } else {
     if (video.playbackRate !== 1.0) {
       video.playbackRate = 1.0;
     }
     autoRateApplied = false;
-    updateGiovangKeepUpStatusUI('synced', 'Synced (1.0x)');
+    updateGiovangKeepUpStatusUI('synced', 'Synced (1.0x)', bufferAhead);
   }
 };
 
@@ -327,6 +355,9 @@ const injectSettingsUI = (videoPlayer) => {
   uiContainer.style.bottom = '60px';
   uiContainer.style.right = '20px';
   uiContainer.style.zIndex = '2147483647'; // ensure it's on top
+  uiContainer.style.display = 'flex';
+  uiContainer.style.gap = '8px';
+  uiContainer.style.alignItems = 'center';
 
   const btn = document.createElement('button');
   btn.className = 'flow-chat-gv-btn';
@@ -350,6 +381,106 @@ const injectSettingsUI = (videoPlayer) => {
     <path style="fill: #fff" d="M11 11 C9.9 11 9 11.9 9 13 L9 23 C9 24.1 9.9 25 11 25 L15 25 L18 28 L21 25 L25 25 C26.1 25 27 24.1 27 23 L27 13 C27 11.9 26.1 11 25 11 L11 11 Z"></path>
   </svg>`;
 
+  const keepUpBtn = document.createElement('button');
+  keepUpBtn.className = 'flow-chat-gv-keepup-btn';
+  keepUpBtn.setAttribute('aria-label', 'Auto Keep-Up (Live)');
+  keepUpBtn.setAttribute('title', 'Auto Keep-Up (Live)');
+  keepUpBtn.style.background = 'rgba(0, 0, 0, 0.6)';
+  keepUpBtn.style.border = '1px solid rgba(255,255,255,0.2)';
+  keepUpBtn.style.borderRadius = '50%';
+  keepUpBtn.style.width = '40px';
+  keepUpBtn.style.height = '40px';
+  keepUpBtn.style.cursor = 'pointer';
+  keepUpBtn.style.display = 'flex';
+  keepUpBtn.style.alignItems = 'center';
+  keepUpBtn.style.justifyContent = 'center';
+  keepUpBtn.style.opacity = '0.7';
+  keepUpBtn.style.transition = 'opacity 0.2s';
+  keepUpBtn.onmouseenter = () => keepUpBtn.style.opacity = '1';
+  keepUpBtn.onmouseleave = () => keepUpBtn.style.opacity = '0.7';
+
+  keepUpBtn.innerHTML = `<svg height="22" version="1.1" viewBox="0 0 36 36" width="22">
+    <path class="fc-gv-keepup-path" style="fill: #fff" d="M11 10 L20 18 L11 26 Z M19 10 L28 18 L19 26 Z"></path>
+  </svg>`;
+
+  const keepUpPanel = document.createElement('div');
+  keepUpPanel.className = 'flow-chat-settings-panel flow-chat-keepup-panel';
+  keepUpPanel.style.bottom = '50px';
+  keepUpPanel.style.right = '0';
+  keepUpPanel.innerHTML = `
+    <div class="flow-chat-setting-item">
+      <div class="flow-chat-setting-header">
+        <span>Auto Keep-Up (Live)</span>
+        <label class="flow-chat-switch">
+          <input type="checkbox" id="fc-keepup-toggle" ${settings.autoKeepUp ? 'checked' : ''}>
+          <span class="flow-chat-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div id="fc-keepup-settings" style="display: ${settings.autoKeepUp ? 'block' : 'none'}">
+      <div class="flow-chat-setting-item fc-keepup-status-item">
+        <div class="flow-chat-keepup-status">
+          <span class="fc-status-dot" id="fc-keepup-dot"></span>
+          <span id="fc-keepup-status-text">Checking status...</span>
+        </div>
+        <button type="button" class="flow-chat-sync-btn" id="fc-sync-now-btn" title="Jump to live edge">Sync Live</button>
+      </div>
+
+      <!-- Live Buffer Visual Meter -->
+      <div class="fc-buffer-container">
+        <div class="fc-buffer-header">
+          <span>Current Buffer:</span>
+          <span class="fc-buffer-val" id="fc-buffer-num">0.00s</span>
+        </div>
+        <div class="fc-buffer-track">
+          <div class="fc-buffer-bar" id="fc-buffer-bar" style="width: 0%;"></div>
+          <div class="fc-buffer-marker target-marker" id="fc-target-marker" style="left: ${Math.min(95, ((settings.keepUpTarget || 1.2) / 4.0) * 100)}%;" title="Safe Target"></div>
+          <div class="fc-buffer-marker trigger-marker" id="fc-trigger-marker" style="left: ${Math.min(95, ((settings.keepUpTrigger || 1.8) / 4.0) * 100)}%;" title="Trigger Threshold"></div>
+        </div>
+        <div class="fc-buffer-scale">
+          <span>0s</span>
+          <span id="fc-scale-target">Target: ${(settings.keepUpTarget || 1.2).toFixed(1)}s</span>
+          <span id="fc-scale-trigger">Catch: ${(settings.keepUpTrigger || 1.8).toFixed(1)}s</span>
+          <span>4s+</span>
+        </div>
+      </div>
+
+      <!-- Quick Presets -->
+      <div class="flow-chat-setting-item" style="padding-bottom: 2px;">
+        <div class="flow-chat-setting-header">
+          <span>Quick Presets</span>
+        </div>
+        <div class="fc-presets-row">
+          <button type="button" class="fc-preset-btn" id="fc-preset-ultra">⚡ Ultra-Low</button>
+          <button type="button" class="fc-preset-btn" id="fc-preset-balanced">⚖️ Balanced</button>
+          <button type="button" class="fc-preset-btn" id="fc-preset-stable">🛡️ Smooth</button>
+        </div>
+      </div>
+
+      <!-- Milestones & Controls -->
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Trigger Threshold (<span id="fc-keepup-trigger-val">${(settings.keepUpTrigger || 1.8).toFixed(1)}</span>s)</span>
+        </div>
+        <input type="range" id="fc-keepup-trigger" min="1.0" max="15.0" step="0.1" value="${settings.keepUpTrigger || 1.8}">
+      </div>
+
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Safe Target (<span id="fc-keepup-target-val">${(settings.keepUpTarget || 1.2).toFixed(1)}</span>s)</span>
+        </div>
+        <input type="range" id="fc-keepup-target" min="0.5" max="10.0" step="0.1" value="${settings.keepUpTarget || 1.2}">
+      </div>
+
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Catch-Up Speed (<span id="fc-keepup-speed-val">${(settings.keepUpSpeed || 1.1).toFixed(2)}</span>x)</span>
+        </div>
+        <input type="range" id="fc-keepup-speed" min="1.05" max="1.30" step="0.05" value="${settings.keepUpSpeed || 1.1}">
+      </div>
+    </div>
+  `;
+
   const panel = document.createElement('div');
   panel.className = 'flow-chat-settings-panel';
   panel.style.bottom = '50px';
@@ -369,31 +500,7 @@ const injectSettingsUI = (videoPlayer) => {
       </div>
       <div class="flow-chat-setting-item">
         <div class="flow-chat-setting-header">
-          <span>Auto Keep-Up (Live)</span>
-          <label class="flow-chat-switch">
-            <input type="checkbox" id="fc-keepup-toggle" ${settings.autoKeepUp ? 'checked' : ''}>
-            <span class="flow-chat-slider"></span>
-          </label>
-        </div>
-      </div>
-      <div id="fc-keepup-settings" style="display: ${settings.autoKeepUp ? 'block' : 'none'}">
-        <div class="flow-chat-setting-item fc-keepup-status-item">
-          <div class="flow-chat-keepup-status">
-            <span class="fc-status-dot" id="fc-keepup-dot"></span>
-            <span id="fc-keepup-status-text">Checking status...</span>
-          </div>
-          <button type="button" class="flow-chat-sync-btn" id="fc-sync-now-btn" title="Jump to live edge">Sync Live</button>
-        </div>
-        <div class="flow-chat-setting-item">
-          <div class="flow-chat-setting-header">
-            <span>Catch-Up Speed (<span id="fc-keepup-speed-val">${settings.keepUpSpeed || 1.1}</span>x)</span>
-          </div>
-          <input type="range" id="fc-keepup-speed" min="1.05" max="1.25" step="0.05" value="${settings.keepUpSpeed || 1.1}">
-        </div>
-      </div>
-      <div class="flow-chat-setting-item">
-        <div class="flow-chat-setting-header">
-          <span>Safe Zone (Né chữ)</span>
+          <span>Safe Zone</span>
           <label class="flow-chat-switch">
             <input type="checkbox" id="fc-zone-toggle" ${settings.zoneEnabled ? 'checked' : ''}>
             <span class="flow-chat-slider"></span>
@@ -486,22 +593,37 @@ const injectSettingsUI = (videoPlayer) => {
   `;
 
   uiContainer.appendChild(btn);
+  uiContainer.appendChild(keepUpBtn);
   uiContainer.appendChild(panel);
+  uiContainer.appendChild(keepUpPanel);
   videoPlayer.appendChild(uiContainer);
 
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
+    keepUpPanel.classList.remove('active');
     panel.classList.toggle('active');
+  });
+
+  keepUpBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    panel.classList.remove('active');
+    keepUpPanel.classList.toggle('active');
   });
 
   document.addEventListener('click', (e) => {
     if (!panel.contains(e.target) && !btn.contains(e.target)) {
       panel.classList.remove('active');
     }
+    if (!keepUpPanel.contains(e.target) && !keepUpBtn.contains(e.target)) {
+      keepUpPanel.classList.remove('active');
+    }
   });
 
   ['keydown', 'keyup', 'keypress'].forEach(eventType => {
     panel.addEventListener(eventType, (e) => {
+      e.stopPropagation();
+    });
+    keepUpPanel.addEventListener(eventType, (e) => {
       e.stopPropagation();
     });
   });
@@ -523,6 +645,35 @@ const injectSettingsUI = (videoPlayer) => {
     }
   });
 
+  const updateGiovangKeepUpUIValues = () => {
+    const trigger = parseFloat(settings.keepUpTrigger) || 1.8;
+    const target = parseFloat(settings.keepUpTarget) || 1.2;
+    const speed = parseFloat(settings.keepUpSpeed) || 1.1;
+
+    const trigEl = document.getElementById('fc-keepup-trigger');
+    const trigVal = document.getElementById('fc-keepup-trigger-val');
+    const targEl = document.getElementById('fc-keepup-target');
+    const targVal = document.getElementById('fc-keepup-target-val');
+    const spdEl = document.getElementById('fc-keepup-speed');
+    const spdVal = document.getElementById('fc-keepup-speed-val');
+    const trigMarker = document.getElementById('fc-trigger-marker');
+    const targMarker = document.getElementById('fc-target-marker');
+    const scaleTrig = document.getElementById('fc-scale-trigger');
+    const scaleTarg = document.getElementById('fc-scale-target');
+
+    if (trigEl) trigEl.value = trigger;
+    if (trigVal) trigVal.innerText = trigger.toFixed(1);
+    if (targEl) targEl.value = target;
+    if (targVal) targVal.innerText = target.toFixed(1);
+    if (spdEl) spdEl.value = speed;
+    if (spdVal) spdVal.innerText = speed.toFixed(2);
+
+    if (trigMarker) trigMarker.style.left = `${Math.min(95, (trigger / 4.0) * 100)}%`;
+    if (targMarker) targMarker.style.left = `${Math.min(95, (target / 4.0) * 100)}%`;
+    if (scaleTrig) scaleTrig.innerText = `Catch: ${trigger.toFixed(1)}s`;
+    if (scaleTarg) scaleTarg.innerText = `Target: ${target.toFixed(1)}s`;
+  };
+
   document.getElementById('fc-keepup-toggle').addEventListener('change', (e) => {
     settings.autoKeepUp = e.target.checked;
     saveSettings();
@@ -540,8 +691,71 @@ const injectSettingsUI = (videoPlayer) => {
 
   document.getElementById('fc-keepup-speed')?.addEventListener('input', (e) => {
     settings.keepUpSpeed = parseFloat(e.target.value);
-    document.getElementById('fc-keepup-speed-val').innerText = settings.keepUpSpeed;
+    document.getElementById('fc-keepup-speed-val').innerText = settings.keepUpSpeed.toFixed(2);
     saveSettings();
+    tickGiovangAutoKeepUp();
+  });
+
+  document.getElementById('fc-keepup-trigger')?.addEventListener('input', (e) => {
+    let val = parseFloat(e.target.value);
+    if (val <= (settings.keepUpTarget || 1.2)) {
+      val = parseFloat(((settings.keepUpTarget || 1.2) + 0.1).toFixed(1));
+      e.target.value = val;
+    }
+    settings.keepUpTrigger = val;
+    document.getElementById('fc-keepup-trigger-val').innerText = val.toFixed(1);
+    const marker = document.getElementById('fc-trigger-marker');
+    if (marker) marker.style.left = `${Math.min(95, (val / 4.0) * 100)}%`;
+    const scaleTrig = document.getElementById('fc-scale-trigger');
+    if (scaleTrig) scaleTrig.innerText = `Catch: ${val.toFixed(1)}s`;
+    saveSettings();
+    tickGiovangAutoKeepUp();
+  });
+
+  document.getElementById('fc-keepup-target')?.addEventListener('input', (e) => {
+    let val = parseFloat(e.target.value);
+    if (val >= (settings.keepUpTrigger || 1.8)) {
+      val = parseFloat(((settings.keepUpTrigger || 1.8) - 0.1).toFixed(1));
+      e.target.value = val;
+    }
+    settings.keepUpTarget = val;
+    document.getElementById('fc-keepup-target-val').innerText = val.toFixed(1);
+    const marker = document.getElementById('fc-target-marker');
+    if (marker) marker.style.left = `${Math.min(95, (val / 4.0) * 100)}%`;
+    const scaleTarg = document.getElementById('fc-scale-target');
+    if (scaleTarg) scaleTarg.innerText = `Target: ${val.toFixed(1)}s`;
+    saveSettings();
+    tickGiovangAutoKeepUp();
+  });
+
+  // Preset Buttons
+  document.getElementById('fc-preset-ultra')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    settings.keepUpTrigger = 1.4;
+    settings.keepUpTarget = 0.9;
+    settings.keepUpSpeed = 1.15;
+    saveSettings();
+    updateGiovangKeepUpUIValues();
+    tickGiovangAutoKeepUp();
+  });
+
+  document.getElementById('fc-preset-balanced')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    settings.keepUpTrigger = 1.8;
+    settings.keepUpTarget = 1.2;
+    settings.keepUpSpeed = 1.10;
+    saveSettings();
+    updateGiovangKeepUpUIValues();
+    tickGiovangAutoKeepUp();
+  });
+
+  document.getElementById('fc-preset-stable')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    settings.keepUpTrigger = 2.5;
+    settings.keepUpTarget = 1.8;
+    settings.keepUpSpeed = 1.10;
+    saveSettings();
+    updateGiovangKeepUpUIValues();
     tickGiovangAutoKeepUp();
   });
 

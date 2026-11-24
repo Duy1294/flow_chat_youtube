@@ -196,7 +196,10 @@ if (window.location.pathname.startsWith('/live_chat')) {
     filteredWords: "",
     antiOverlap: false,
     autoKeepUp: false,
-    keepUpSpeed: 1.1
+    keepUpSpeed: 1.1,
+    keepUpTrigger: 1.8,
+    keepUpTarget: 1.2,
+    showBufferBadge: true
   };
 
   // Load settings from storage
@@ -398,21 +401,52 @@ if (window.location.pathname.startsWith('/live_chat')) {
     return false;
   };
 
-  const updateKeepUpStatusUI = (status, text) => {
-    const dot = document.getElementById('fc-keepup-dot');
-    const textEl = document.getElementById('fc-keepup-status-text');
-    if (!dot || !textEl) return;
-
-    dot.className = 'fc-status-dot';
-    if (status === 'synced') {
-      dot.classList.add('synced');
-    } else if (status === 'catching-up') {
-      dot.classList.add('catching-up');
-    } else {
-      dot.classList.add('inactive');
+  const updateKeepUpStatusUI = (status, text, bufferAhead = 0) => {
+    const keepUpBtn = document.querySelector('.flow-chat-keepup-btn');
+    if (keepUpBtn) {
+      keepUpBtn.setAttribute('title', `Auto Keep-Up: ${text}${bufferAhead > 0 ? ` (${bufferAhead.toFixed(1)}s)` : ''}`);
+      keepUpBtn.classList.remove('fc-keepup-active', 'fc-keepup-catching');
+      if (status === 'synced') {
+        keepUpBtn.classList.add('fc-keepup-active');
+      } else if (status === 'catching-up') {
+        keepUpBtn.classList.add('fc-keepup-active', 'fc-keepup-catching');
+      }
     }
 
-    textEl.textContent = text;
+    const badge = document.querySelector('.flow-chat-buffer-badge');
+    if (badge) {
+      if (settings.autoKeepUp && settings.showBufferBadge !== false && text !== 'Not a live stream' && status !== 'inactive') {
+        badge.style.display = 'inline-flex';
+        badge.textContent = `${bufferAhead.toFixed(1)}s`;
+        badge.className = `flow-chat-buffer-badge ${status}`;
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    const dot = document.getElementById('fc-keepup-dot');
+    const textEl = document.getElementById('fc-keepup-status-text');
+    if (dot) {
+      dot.className = 'fc-status-dot';
+      if (status === 'synced') {
+        dot.classList.add('synced');
+      } else if (status === 'catching-up') {
+        dot.classList.add('catching-up');
+      } else {
+        dot.classList.add('inactive');
+      }
+    }
+    if (textEl) textEl.textContent = text;
+
+    // Update Buffer Bar Meter in popup
+    const bufferNum = document.getElementById('fc-buffer-num');
+    const bufferBar = document.getElementById('fc-buffer-bar');
+    if (bufferNum) bufferNum.textContent = `${bufferAhead.toFixed(2)}s`;
+    if (bufferBar) {
+      const pct = Math.min(100, Math.max(0, (bufferAhead / 4.0) * 100));
+      bufferBar.style.width = `${pct}%`;
+      bufferBar.className = `fc-buffer-bar ${status}`;
+    }
   };
 
   const tickAutoKeepUp = () => {
@@ -424,7 +458,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
         video.playbackRate = 1.0;
         autoRateApplied = false;
       }
-      updateKeepUpStatusUI('inactive', 'Auto Keep-Up: Off');
+      updateKeepUpStatusUI('inactive', 'Auto Keep-Up: Off', 0);
       return;
     }
 
@@ -434,7 +468,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
         video.playbackRate = 1.0;
         autoRateApplied = false;
       }
-      updateKeepUpStatusUI('inactive', 'Not a live stream');
+      updateKeepUpStatusUI('inactive', 'Not a live stream', 0);
       return;
     }
 
@@ -444,41 +478,43 @@ if (window.location.pathname.startsWith('/live_chat')) {
         video.playbackRate = 1.0;
         autoRateApplied = false;
       }
-      updateKeepUpStatusUI('inactive', 'Paused');
+      updateKeepUpStatusUI('inactive', 'Paused', 0);
       return;
     }
 
     // 4. If seeking or currently buffering, don't change rate
     if (video.seeking || video.readyState < 3) {
-      updateKeepUpStatusUI('inactive', 'Buffering...');
+      updateKeepUpStatusUI('inactive', 'Buffering...', 0);
       return;
     }
 
     const bufferAhead = getBufferAhead(video);
     const catchUpSpeed = parseFloat(settings.keepUpSpeed) || 1.1;
+    const trigger = parseFloat(settings.keepUpTrigger) || 1.8;
+    const target = parseFloat(settings.keepUpTarget) || 1.2;
 
     // Ensure audio pitch is preserved so voices sound completely natural
     if (video.preservesPitch === false) {
       video.preservesPitch = true;
     }
 
-    // Trigger catch-up as soon as buffer accumulates (> 1.8s),
-    // and continue smoothly until buffer drops to the safe live margin (<= 1.2s).
-    const shouldCatchUp = autoRateApplied ? (bufferAhead > 1.2) : (bufferAhead > 1.8);
+    // Trigger catch-up when buffer accumulates (> trigger),
+    // and continue smoothly until buffer drops to the safe live margin (<= target).
+    const shouldCatchUp = autoRateApplied ? (bufferAhead > target) : (bufferAhead > trigger);
 
     if (shouldCatchUp) {
       if (video.playbackRate !== catchUpSpeed) {
         video.playbackRate = catchUpSpeed;
       }
       autoRateApplied = true;
-      updateKeepUpStatusUI('catching-up', `Catching up (${catchUpSpeed}x)`);
+      updateKeepUpStatusUI('catching-up', `Catching up (${catchUpSpeed}x)`, bufferAhead);
     } else {
       // Caught up to live edge, return to normal 1.0x
       if (video.playbackRate !== 1.0) {
         video.playbackRate = 1.0;
       }
       autoRateApplied = false;
-      updateKeepUpStatusUI('synced', 'Synced (1.0x)');
+      updateKeepUpStatusUI('synced', 'Synced (1.0x)', bufferAhead);
     }
   };
 
@@ -491,7 +527,7 @@ if (window.location.pathname.startsWith('/live_chat')) {
     const rightControls = document.querySelector('.ytp-right-controls');
     if (!rightControls) return;
 
-    // Inject Button
+    // Inject Flow Chat Settings Button
     const btn = document.createElement('button');
     btn.className = 'ytp-button flow-chat-ytp-btn';
     btn.setAttribute('aria-label', 'Flow Chat Settings');
@@ -500,6 +536,15 @@ if (window.location.pathname.startsWith('/live_chat')) {
     btn.innerHTML = `<svg height="100%" version="1.1" viewBox="0 0 36 36" width="100%">
       <use class="ytp-svg-shadow" href="#ytp-id-flow-chat"></use>
       <path style="transform-origin: 18px 18px; transform: scale(1.4);" class="ytp-svg-fill" id="ytp-id-flow-chat" d="M11 11 C9.9 11 9 11.9 9 13 L9 23 C9 24.1 9.9 25 11 25 L15 25 L18 28 L21 25 L25 25 C26.1 25 27 24.1 27 23 L27 13 C27 11.9 26.1 11 25 11 L11 11 Z"></path>
+    </svg>`;
+
+    // Inject Auto Keep-Up Button
+    const keepUpBtn = document.createElement('button');
+    keepUpBtn.className = 'ytp-button flow-chat-keepup-btn';
+    keepUpBtn.setAttribute('aria-label', 'Auto Keep-Up (Live)');
+    keepUpBtn.setAttribute('title', 'Auto Keep-Up (Live)');
+    keepUpBtn.innerHTML = `<svg height="100%" version="1.1" viewBox="0 0 36 36" width="100%">
+      <path class="ytp-svg-fill" d="M11 10 L20 18 L11 26 Z M19 10 L28 18 L19 26 Z" style="transform-origin: 18px 18px; transform: scale(0.95);"></path>
     </svg>`;
 
     // Inject Input Box
@@ -545,8 +590,29 @@ if (window.location.pathname.startsWith('/live_chat')) {
         }
       });
     });
+    // Inject Buffer Badge in toolbar
+    const bufferBadge = document.createElement('span');
+    bufferBadge.className = 'flow-chat-buffer-badge';
+    bufferBadge.style.display = (settings.autoKeepUp && settings.showBufferBadge !== false) ? 'inline-flex' : 'none';
+    bufferBadge.textContent = '0.0s';
+    bufferBadge.setAttribute('title', 'Current buffer latency (Click to open settings)');
+
+    bufferBadge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      panel.classList.remove('active');
+      if (!keepUpPanel.classList.contains('active')) {
+        keepUpPanel.style.left = '';
+        keepUpPanel.style.top = '';
+        keepUpPanel.style.bottom = '';
+        keepUpPanel.style.right = '';
+      }
+      keepUpPanel.classList.toggle('active');
+    });
+
     // Focus states are now handled entirely by CSS :has() for robustness
-    rightControls.insertBefore(btn, rightControls.firstChild);
+    rightControls.insertBefore(bufferBadge, rightControls.firstChild);
+    rightControls.insertBefore(keepUpBtn, bufferBadge);
+    rightControls.insertBefore(btn, keepUpBtn);
     rightControls.insertBefore(chatInput, btn);
 
     // Inject Settings Panel
@@ -572,30 +638,6 @@ if (window.location.pathname.startsWith('/live_chat')) {
             <input type="checkbox" id="fc-overlap-toggle" ${settings.antiOverlap ? 'checked' : ''}>
             <span class="flow-chat-slider"></span>
           </label>
-        </div>
-      </div>
-      <div class="flow-chat-setting-item">
-        <div class="flow-chat-setting-header">
-          <span>Auto Keep-Up (Live)</span>
-          <label class="flow-chat-switch">
-            <input type="checkbox" id="fc-keepup-toggle" ${settings.autoKeepUp ? 'checked' : ''}>
-            <span class="flow-chat-slider"></span>
-          </label>
-        </div>
-      </div>
-      <div id="fc-keepup-settings" style="display: ${settings.autoKeepUp ? 'block' : 'none'}">
-        <div class="flow-chat-setting-item fc-keepup-status-item">
-          <div class="flow-chat-keepup-status">
-            <span class="fc-status-dot" id="fc-keepup-dot"></span>
-            <span id="fc-keepup-status-text">Checking status...</span>
-          </div>
-          <button type="button" class="flow-chat-sync-btn" id="fc-sync-now-btn" title="Jump to live edge">Sync Live</button>
-        </div>
-        <div class="flow-chat-setting-item">
-          <div class="flow-chat-setting-header">
-            <span>Catch-Up Speed (<span id="fc-keepup-speed-val">${settings.keepUpSpeed || 1.1}</span>x)</span>
-          </div>
-          <input type="range" id="fc-keepup-speed" min="1.05" max="1.25" step="0.05" value="${settings.keepUpSpeed || 1.1}">
         </div>
       </div>
       <div class="flow-chat-setting-item">
@@ -698,69 +740,163 @@ if (window.location.pathname.startsWith('/live_chat')) {
       </div>
     `;
 
-    // Draggable panel logic
-    let isDragging = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
-    let initialLeft = 0;
-    let initialTop = 0;
+    // Inject Auto Keep-Up Panel
+    const keepUpPanel = document.createElement('div');
+    keepUpPanel.className = 'flow-chat-settings-panel flow-chat-keepup-panel';
+    keepUpPanel.innerHTML = `
+      <div class="flow-chat-setting-item">
+        <div class="flow-chat-setting-header">
+          <span>Auto Keep-Up (Live)</span>
+          <label class="flow-chat-switch">
+            <input type="checkbox" id="fc-keepup-toggle" ${settings.autoKeepUp ? 'checked' : ''}>
+            <span class="flow-chat-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div id="fc-keepup-settings" style="display: ${settings.autoKeepUp ? 'block' : 'none'}">
+        <div class="flow-chat-setting-item fc-keepup-status-item">
+          <div class="flow-chat-keepup-status">
+            <span class="fc-status-dot" id="fc-keepup-dot"></span>
+            <span id="fc-keepup-status-text">Checking status...</span>
+          </div>
+          <button type="button" class="flow-chat-sync-btn" id="fc-sync-now-btn" title="Jump to live edge">Sync Live</button>
+        </div>
 
-    // Prevent clicks from bubbling up and pausing the video
-    ['mousedown', 'mouseup', 'click'].forEach(eventType => {
-      panel.addEventListener(eventType, (e) => {
-        e.stopPropagation();
+        <!-- Live Buffer Visual Meter -->
+        <div class="fc-buffer-container">
+          <div class="fc-buffer-header">
+            <span>Current Buffer:</span>
+            <span class="fc-buffer-val" id="fc-buffer-num">0.00s</span>
+          </div>
+          <div class="fc-buffer-track">
+            <div class="fc-buffer-bar" id="fc-buffer-bar" style="width: 0%;"></div>
+            <div class="fc-buffer-marker target-marker" id="fc-target-marker" style="left: ${Math.min(95, ((settings.keepUpTarget || 1.2) / 4.0) * 100)}%;" title="Safe Target"></div>
+            <div class="fc-buffer-marker trigger-marker" id="fc-trigger-marker" style="left: ${Math.min(95, ((settings.keepUpTrigger || 1.8) / 4.0) * 100)}%;" title="Trigger Threshold"></div>
+          </div>
+          <div class="fc-buffer-scale">
+            <span>0s</span>
+            <span id="fc-scale-target">Target: ${(settings.keepUpTarget || 1.2).toFixed(1)}s</span>
+            <span id="fc-scale-trigger">Catch: ${(settings.keepUpTrigger || 1.8).toFixed(1)}s</span>
+            <span>4s+</span>
+          </div>
+        </div>
+
+        <!-- Quick Presets -->
+        <div class="flow-chat-setting-item" style="padding-bottom: 2px;">
+          <div class="flow-chat-setting-header">
+            <span>Quick Presets</span>
+          </div>
+          <div class="fc-presets-row">
+            <button type="button" class="fc-preset-btn" id="fc-preset-ultra">⚡ Ultra-Low</button>
+            <button type="button" class="fc-preset-btn" id="fc-preset-balanced">⚖️ Balanced</button>
+            <button type="button" class="fc-preset-btn" id="fc-preset-stable">🛡️ Smooth</button>
+          </div>
+        </div>
+
+        <!-- Milestones & Controls -->
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Trigger Threshold (<span id="fc-keepup-trigger-val">${(settings.keepUpTrigger || 1.8).toFixed(1)}</span>s)</span>
+          </div>
+          <input type="range" id="fc-keepup-trigger" min="1.0" max="15.0" step="0.1" value="${settings.keepUpTrigger || 1.8}">
+        </div>
+
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Safe Target (<span id="fc-keepup-target-val">${(settings.keepUpTarget || 1.2).toFixed(1)}</span>s)</span>
+          </div>
+          <input type="range" id="fc-keepup-target" min="0.5" max="10.0" step="0.1" value="${settings.keepUpTarget || 1.2}">
+        </div>
+
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Catch-Up Speed (<span id="fc-keepup-speed-val">${(settings.keepUpSpeed || 1.1).toFixed(2)}</span>x)</span>
+          </div>
+          <input type="range" id="fc-keepup-speed" min="1.05" max="1.30" step="0.05" value="${settings.keepUpSpeed || 1.1}">
+        </div>
+
+        <div class="flow-chat-setting-item">
+          <div class="flow-chat-setting-header">
+            <span>Show Buffer Badge on Player</span>
+            <label class="flow-chat-switch">
+              <input type="checkbox" id="fc-buffer-badge-toggle" ${settings.showBufferBadge !== false ? 'checked' : ''}>
+              <span class="flow-chat-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Draggable panel helper
+    const setupDraggable = (targetPanel) => {
+      let isDragging = false;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let initialLeft = 0;
+      let initialTop = 0;
+
+      // Prevent clicks from bubbling up and pausing the video
+      ['mousedown', 'mouseup', 'click'].forEach(eventType => {
+        targetPanel.addEventListener(eventType, (e) => {
+          e.stopPropagation();
+        });
       });
-    });
 
-    panel.addEventListener('mousedown', (e) => {
-      const isInteractive = e.target.tagName === 'INPUT' ||
-        e.target.tagName === 'LABEL' ||
-        e.target.closest('.flow-chat-switch');
-      if (isInteractive) return;
-      if (e.offsetX > panel.clientWidth) return; // Prevent drag on scrollbar
+      targetPanel.addEventListener('mousedown', (e) => {
+        const isInteractive = e.target.tagName === 'INPUT' ||
+          e.target.tagName === 'BUTTON' ||
+          e.target.tagName === 'LABEL' ||
+          e.target.closest('.flow-chat-switch');
+        if (isInteractive) return;
+        if (e.offsetX > targetPanel.clientWidth) return; // Prevent drag on scrollbar
 
-      isDragging = true;
-      dragStartX = e.clientX;
-      dragStartY = e.clientY;
+        isDragging = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
 
-      initialLeft = panel.offsetLeft;
-      initialTop = panel.offsetTop;
+        initialLeft = targetPanel.offsetLeft;
+        initialTop = targetPanel.offsetTop;
 
-      panel.style.bottom = 'auto';
-      panel.style.right = 'auto';
-      panel.style.left = initialLeft + 'px';
-      panel.style.top = initialTop + 'px';
+        targetPanel.style.bottom = 'auto';
+        targetPanel.style.right = 'auto';
+        targetPanel.style.left = initialLeft + 'px';
+        targetPanel.style.top = initialTop + 'px';
 
-      panel.classList.add('fc-dragging');
-      document.body.style.userSelect = 'none';
-    });
+        targetPanel.classList.add('fc-dragging');
+        document.body.style.userSelect = 'none';
+      });
 
-    window.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      const dx = e.clientX - dragStartX;
-      const dy = e.clientY - dragStartY;
-      panel.style.left = (initialLeft + dx) + 'px';
-      panel.style.top = (initialTop + dy) + 'px';
-    });
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        targetPanel.style.left = (initialLeft + dx) + 'px';
+        targetPanel.style.top = (initialTop + dy) + 'px';
+      });
 
-    window.addEventListener('mouseup', () => {
-      if (isDragging) {
-        isDragging = false;
-        panel.classList.remove('fc-dragging');
-        document.body.style.userSelect = '';
-      }
-    }, true); // Use capture to ensure we catch it before panel's stopPropagation
+      window.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          targetPanel.classList.remove('fc-dragging');
+          document.body.style.userSelect = '';
+        }
+      }, true);
+    };
+
+    setupDraggable(panel);
+    setupDraggable(keepUpPanel);
 
     const playerContainer = document.querySelector('.html5-video-player');
     if (playerContainer) {
       playerContainer.appendChild(panel);
+      playerContainer.appendChild(keepUpPanel);
     }
 
-    // Toggle menu visibility
+    // Toggle Flow Chat settings panel
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      keepUpPanel.classList.remove('active');
 
-      // If we are opening the panel, reset its dragged position to default
       if (!panel.classList.contains('active')) {
         panel.style.left = '';
         panel.style.top = '';
@@ -771,16 +907,37 @@ if (window.location.pathname.startsWith('/live_chat')) {
       panel.classList.toggle('active');
     });
 
-    // Close menu when clicking outside
+    // Toggle Auto Keep-Up panel
+    keepUpBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      panel.classList.remove('active');
+
+      if (!keepUpPanel.classList.contains('active')) {
+        keepUpPanel.style.left = '';
+        keepUpPanel.style.top = '';
+        keepUpPanel.style.bottom = '';
+        keepUpPanel.style.right = '';
+      }
+
+      keepUpPanel.classList.toggle('active');
+    });
+
+    // Close menus when clicking outside
     document.addEventListener('click', (e) => {
       if (!panel.contains(e.target) && !btn.contains(e.target)) {
         panel.classList.remove('active');
       }
+      if (!keepUpPanel.contains(e.target) && !keepUpBtn.contains(e.target)) {
+        keepUpPanel.classList.remove('active');
+      }
     });
 
-    // Stop key events inside settings panel from triggering YouTube player shortcuts
+    // Stop key events inside settings panels from triggering YouTube player shortcuts
     ['keydown', 'keyup', 'keypress'].forEach(eventType => {
       panel.addEventListener(eventType, (e) => {
+        e.stopPropagation();
+      });
+      keepUpPanel.addEventListener(eventType, (e) => {
         e.stopPropagation();
       });
     });
@@ -825,12 +982,50 @@ if (window.location.pathname.startsWith('/live_chat')) {
       }
     });
 
+    const updateKeepUpUIValues = () => {
+      const trigger = parseFloat(settings.keepUpTrigger) || 1.8;
+      const target = parseFloat(settings.keepUpTarget) || 1.2;
+      const speed = parseFloat(settings.keepUpSpeed) || 1.1;
+
+      const trigEl = document.getElementById('fc-keepup-trigger');
+      const trigVal = document.getElementById('fc-keepup-trigger-val');
+      const targEl = document.getElementById('fc-keepup-target');
+      const targVal = document.getElementById('fc-keepup-target-val');
+      const spdEl = document.getElementById('fc-keepup-speed');
+      const spdVal = document.getElementById('fc-keepup-speed-val');
+      const trigMarker = document.getElementById('fc-trigger-marker');
+      const targMarker = document.getElementById('fc-target-marker');
+      const scaleTrig = document.getElementById('fc-scale-trigger');
+      const scaleTarg = document.getElementById('fc-scale-target');
+      const badgeToggle = document.getElementById('fc-buffer-badge-toggle');
+
+      if (trigEl) trigEl.value = trigger;
+      if (trigVal) trigVal.innerText = trigger.toFixed(1);
+      if (targEl) targEl.value = target;
+      if (targVal) targVal.innerText = target.toFixed(1);
+      if (spdEl) spdEl.value = speed;
+      if (spdVal) spdVal.innerText = speed.toFixed(2);
+      if (badgeToggle) badgeToggle.checked = settings.showBufferBadge !== false;
+
+      if (trigMarker) trigMarker.style.left = `${Math.min(95, (trigger / 4.0) * 100)}%`;
+      if (targMarker) targMarker.style.left = `${Math.min(95, (target / 4.0) * 100)}%`;
+      if (scaleTrig) scaleTrig.innerText = `Catch: ${trigger.toFixed(1)}s`;
+      if (scaleTarg) scaleTarg.innerText = `Target: ${target.toFixed(1)}s`;
+
+      if (bufferBadge) {
+        bufferBadge.style.display = (settings.autoKeepUp && settings.showBufferBadge !== false) ? 'inline-flex' : 'none';
+      }
+    };
+
     document.getElementById('fc-keepup-toggle').addEventListener('change', (e) => {
       settings.autoKeepUp = e.target.checked;
       saveSettings();
       const keepUpSettingsDiv = document.getElementById('fc-keepup-settings');
       if (keepUpSettingsDiv) {
         keepUpSettingsDiv.style.display = settings.autoKeepUp ? 'block' : 'none';
+      }
+      if (bufferBadge) {
+        bufferBadge.style.display = (settings.autoKeepUp && settings.showBufferBadge !== false) ? 'inline-flex' : 'none';
       }
       tickAutoKeepUp();
     });
@@ -842,8 +1037,81 @@ if (window.location.pathname.startsWith('/live_chat')) {
 
     document.getElementById('fc-keepup-speed')?.addEventListener('input', (e) => {
       settings.keepUpSpeed = parseFloat(e.target.value);
-      document.getElementById('fc-keepup-speed-val').innerText = settings.keepUpSpeed;
+      document.getElementById('fc-keepup-speed-val').innerText = settings.keepUpSpeed.toFixed(2);
       saveSettings();
+      tickAutoKeepUp();
+    });
+
+    document.getElementById('fc-keepup-trigger')?.addEventListener('input', (e) => {
+      let val = parseFloat(e.target.value);
+      // Ensure trigger is always greater than target
+      if (val <= (settings.keepUpTarget || 1.2)) {
+        val = parseFloat(((settings.keepUpTarget || 1.2) + 0.1).toFixed(1));
+        e.target.value = val;
+      }
+      settings.keepUpTrigger = val;
+      document.getElementById('fc-keepup-trigger-val').innerText = val.toFixed(1);
+      const marker = document.getElementById('fc-trigger-marker');
+      if (marker) marker.style.left = `${Math.min(95, (val / 4.0) * 100)}%`;
+      const scaleTrig = document.getElementById('fc-scale-trigger');
+      if (scaleTrig) scaleTrig.innerText = `Catch: ${val.toFixed(1)}s`;
+      saveSettings();
+      tickAutoKeepUp();
+    });
+
+    document.getElementById('fc-keepup-target')?.addEventListener('input', (e) => {
+      let val = parseFloat(e.target.value);
+      // Ensure target is always less than trigger
+      if (val >= (settings.keepUpTrigger || 1.8)) {
+        val = parseFloat(((settings.keepUpTrigger || 1.8) - 0.1).toFixed(1));
+        e.target.value = val;
+      }
+      settings.keepUpTarget = val;
+      document.getElementById('fc-keepup-target-val').innerText = val.toFixed(1);
+      const marker = document.getElementById('fc-target-marker');
+      if (marker) marker.style.left = `${Math.min(95, (val / 4.0) * 100)}%`;
+      const scaleTarg = document.getElementById('fc-scale-target');
+      if (scaleTarg) scaleTarg.innerText = `Target: ${val.toFixed(1)}s`;
+      saveSettings();
+      tickAutoKeepUp();
+    });
+
+    document.getElementById('fc-buffer-badge-toggle')?.addEventListener('change', (e) => {
+      settings.showBufferBadge = e.target.checked;
+      if (bufferBadge) {
+        bufferBadge.style.display = (settings.autoKeepUp && settings.showBufferBadge) ? 'inline-flex' : 'none';
+      }
+      saveSettings();
+    });
+
+    // Preset Buttons
+    document.getElementById('fc-preset-ultra')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      settings.keepUpTrigger = 1.4;
+      settings.keepUpTarget = 0.9;
+      settings.keepUpSpeed = 1.15;
+      saveSettings();
+      updateKeepUpUIValues();
+      tickAutoKeepUp();
+    });
+
+    document.getElementById('fc-preset-balanced')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      settings.keepUpTrigger = 1.8;
+      settings.keepUpTarget = 1.2;
+      settings.keepUpSpeed = 1.10;
+      saveSettings();
+      updateKeepUpUIValues();
+      tickAutoKeepUp();
+    });
+
+    document.getElementById('fc-preset-stable')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      settings.keepUpTrigger = 2.5;
+      settings.keepUpTarget = 1.8;
+      settings.keepUpSpeed = 1.10;
+      saveSettings();
+      updateKeepUpUIValues();
       tickAutoKeepUp();
     });
 
